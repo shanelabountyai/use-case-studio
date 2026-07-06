@@ -8,16 +8,28 @@ import {
 } from "@/lib/engine";
 import { EXAMPLES } from "@/lib/examples";
 import { buildRegister } from "@/lib/register";
+import { blankEngagement, type EngagementInputs } from "@/lib/deliverykit";
 import { C, MONO, SANS, btn } from "../theme";
 import { CaptureStage } from "./CaptureStage";
 import { EvaluateStage } from "./EvaluateStage";
 import { RecommendStage } from "./RecommendStage";
 import { ExportStage } from "./ExportStage";
 import { LibraryStage } from "./LibraryStage";
+import { DeliverStage } from "./DeliverStage";
 import { ShowcaseBrief } from "./ShowcaseBrief";
 import { StoreChip, type StoreStatus } from "./panels";
 
-const STAGES = ["Capture", "Evaluate", "Recommend", "Export", "Library"];
+const STAGES = ["Capture", "Evaluate", "Recommend", "Export", "Library", "Deliver"];
+
+/* Engagement inputs (DK-1) persist as an additive top-level key on the case
+   payload — the engine ignores unknown fields and M3's Zod schema passes them
+   through. Read it back tolerantly so pre-DK-1 records (no engagement) load
+   with sensible defaults. */
+type CasePayload = UseCase & { engagement?: Partial<EngagementInputs> };
+const readEngagement = (uc: UseCase): EngagementInputs => ({
+  ...blankEngagement(),
+  ...((uc as CasePayload).engagement || {}),
+});
 
 /* Rows returned by /api/use-cases (denormalized columns computed server-side). */
 interface ApiRow { id: string; name: string; verdict: Verdict; composite: number; quadrant: string; payload: UseCase; updatedAt: string; }
@@ -49,6 +61,7 @@ const safeFile = (n: string) => String(n || "use-case").replace(/[\\/:*?"<>|]+/g
 
 export default function StudioApp() {
   const [uc, setUc] = useState<UseCase>(EXAMPLES[0]);
+  const [engagement, setEngagement] = useState<EngagementInputs>(() => readEngagement(EXAMPLES[0]));
   const [stage, setStage] = useState(0);
   const [showcase, setShowcase] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -94,7 +107,9 @@ export default function StudioApp() {
      shown in the library come from the SERVER row (never the client's math) —
      the optimistic entry is reconciled or honestly marked failed. */
   async function saveToLibrary() {
-    const snapshot: UseCase = JSON.parse(JSON.stringify(uc));
+    // Engagement rides along as an additive key on the persisted payload; the
+    // engine ignores it and the server recomputes the verdict from the scores.
+    const snapshot: CasePayload = { ...JSON.parse(JSON.stringify(uc)), engagement };
     const optimistic: LibraryRecord = {
       id: currentId || `unsaved-${Date.now().toString(36)}`,
       savedAt: new Date().toISOString(), uc: snapshot,
@@ -127,6 +142,7 @@ export default function StudioApp() {
 
   function loadRecord(rec: LibraryRecord) {
     setUc(hydrate(rec.uc));
+    setEngagement(readEngagement(rec.uc));
     setCurrentId(rec.id); setStage(1); setShowcase(false);
     flash(`Loaded “${rec.uc.name || "untitled"}”`);
   }
@@ -146,17 +162,18 @@ export default function StudioApp() {
     }
   }
 
-  const newCase = () => { setUc(blankCase()); setCurrentId(null); setStage(0); flash("New blank case"); };
+  const newCase = () => { setUc(blankCase()); setEngagement(blankEngagement()); setCurrentId(null); setStage(0); flash("New blank case"); };
 
   const doExportJson = () => {
-    if (!download(`${(uc.name || "use-case").replace(/\s+/g, "-").toLowerCase()}.json`, JSON.stringify(uc, null, 2), "application/json")) flash("Download blocked — use Copy instead");
+    const payload: CasePayload = { ...uc, engagement };
+    if (!download(`${(uc.name || "use-case").replace(/\s+/g, "-").toLowerCase()}.json`, JSON.stringify(payload, null, 2), "application/json")) flash("Download blocked — use Copy instead");
   };
   const doImport = (file: File) => {
     const r = new FileReader();
     r.onload = () => {
       try {
         const p = JSON.parse(String(r.result));
-        setUc(hydrate(p)); setCurrentId(null); flash("Imported");
+        setUc(hydrate(p)); setEngagement(readEngagement(p)); setCurrentId(null); flash("Imported");
       } catch { flash("That file isn't valid JSON from this tool."); }
     };
     r.readAsText(file);
@@ -206,7 +223,7 @@ export default function StudioApp() {
           <div className="flex gap-2 mt-4 flex-wrap items-center">
             <span style={{ fontFamily: MONO, fontSize: 10, letterSpacing: "0.1em", color: C.inkSoft }} className="uppercase">Load example:</span>
             {EXAMPLES.map((ex, i) => (
-              <button key={i} onClick={() => { setUc(JSON.parse(JSON.stringify(ex))); setCurrentId(null); setStage(0); }} style={btn(C.surface, C.ink, `1px solid ${C.line}`)}>{ex.name}</button>
+              <button key={i} onClick={() => { setUc(JSON.parse(JSON.stringify(ex))); setEngagement(readEngagement(ex)); setCurrentId(null); setStage(0); }} style={btn(C.surface, C.ink, `1px solid ${C.line}`)}>{ex.name}</button>
             ))}
             <button onClick={newCase} style={btn("transparent", C.inkSoft, `1px dashed ${C.inkSoft}`)}>blank</button>
           </div>
@@ -244,6 +261,12 @@ export default function StudioApp() {
             library={library} currentId={currentId} storeStatus={storeStatus}
             onLoad={loadRecord} onDelete={deleteRecord}
             onCopy={doCopy} onDownload={doDownload} libCsv={libCsv} register={register}
+          />
+        )}
+        {stage === 5 && (
+          <DeliverStage
+            uc={uc} ev={ev} engagement={engagement} setEngagement={setEngagement}
+            currentId={currentId} storeStatus={storeStatus} onSave={saveToLibrary} onNew={newCase}
           />
         )}
 
