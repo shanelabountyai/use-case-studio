@@ -11,7 +11,9 @@ export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
   retries: process.env.CI ? 1 : 0,
-  reporter: "list",
+  // "list" for readable console output; "html" (never auto-opened) so CI
+  // has a playwright-report/ artifact to upload on failure.
+  reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
     trace: "on-first-retry",

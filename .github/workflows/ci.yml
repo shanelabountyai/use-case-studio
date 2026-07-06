@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Required repo secrets (Settings -> Secrets and variables -> Actions):
+#   DATABASE_URL, AUTH_SECRET, AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET, AUTH_RESEND_KEY
+#   NEON_API_KEY, NEON_PROJECT_ID  — additionally required to provision the
+#     disposable per-run Neon branch the integration/e2e jobs test against
+#     (never dev or prod). NEON_PROJECT_ID isn't sensitive and could instead
+#     be a repo "Variable" (vars.NEON_PROJECT_ID) — a secret works too and
+#     keeps everything in one place.
+# The build/unit job below never opens a real DB connection (only imports
+# the modules), so DATABASE_URL there just needs to be syntactically a
+# postgres URL — the real secret works fine for that, nothing sensitive
+# is exposed by using it.
+
+jobs:
+  build-and-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # package-lock.json isn't committed in this repo (see .gitignore), so
+      # `npm ci` (and setup-node's built-in lockfile cache) aren't available.
+      - run: npm install
+      - name: Build
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+        run: npm run build
+      - name: Unit tests
+        run: npm run test
+
+  integration:
+    needs: build-and-unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - name: Create Neon branch
+        id: neon-branch
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          branch_name: ci-integration-${{ github.run_id }}
+      - name: Apply migrations to the branch
+        env:
+          DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
+        run: npm run db:migrate
+      - name: Integration tests (real Postgres, disposable branch)
+        env:
+          DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
+        run: npm run test:integration
+      - name: Delete Neon branch
+        if: always()
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          branch: ci-integration-${{ github.run_id }}
+
+  e2e:
+    needs: integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: Create Neon branch
+        id: neon-branch
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          branch_name: ci-e2e-${{ github.run_id }}
+      - name: Apply migrations to the branch
+        env:
+          DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
+        run: npm run db:migrate
+      - name: e2e tests (real Postgres, disposable branch)
+        # playwright.config.ts's webServer runs `npm run build && npm run
+        # start` itself before the specs execute — no separate build step
+        # needed here, and its env is inherited from this step's env below.
+        env:
+          DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          AUTH_GOOGLE_ID: ${{ secrets.AUTH_GOOGLE_ID }}
+          AUTH_GOOGLE_SECRET: ${{ secrets.AUTH_GOOGLE_SECRET }}
+          AUTH_RESEND_KEY: ${{ secrets.AUTH_RESEND_KEY }}
+          CI: true
+        run: npx playwright test
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+      - name: Delete Neon branch
+        if: always()
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          branch: ci-e2e-${{ github.run_id }}
