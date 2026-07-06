@@ -13,6 +13,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     verificationTokensTable: verificationTokens,
   }),
   // Resend reads AUTH_RESEND_KEY automatically (Auth.js env-var convention); the
-  // adapter's verificationTokens table backs the magic-link flow.
-  providers: [Google, Resend],
+  // adapter's verificationTokens table backs the magic-link flow. `from` must be
+  // a Resend-verified sender — their shared test domain works without DNS setup.
+  providers: [Google, Resend({ from: "onboarding@resend.dev" })],
 });
