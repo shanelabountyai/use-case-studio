@@ -4,6 +4,7 @@ import Resend from "next-auth/providers/resend";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/db";
 import { users, accounts, sessions, verificationTokens } from "@/db/schema";
+import { seedExamplesForUser } from "@/lib/onboarding";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: DrizzleAdapter(db, {
@@ -16,4 +17,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // adapter's verificationTokens table backs the magic-link flow. `from` must be
   // a Resend-verified sender — their shared test domain works without DNS setup.
   providers: [Google, Resend({ from: "onboarding@resend.dev" })],
+  events: {
+    // Fires exactly once, when the adapter creates a brand-new user row.
+    async createUser({ user }) {
+      if (user.id) await seedExamplesForUser(user.id);
+    },
+  },
 });
