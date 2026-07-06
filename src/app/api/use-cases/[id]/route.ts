@@ -3,7 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { useCases } from "@/db/schema";
-import { evaluate, type UseCase } from "@/lib/engine";
+import { evaluate } from "@/lib/engine";
+import { parseUseCase } from "@/lib/validation";
 
 // Every query is scoped by (id AND userId): a user can never touch another user's rows.
 const owned = (id: string, userId: string) => and(eq(useCases.id, id), eq(useCases.userId, userId));
@@ -20,7 +21,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id } = await params;
-  const payload = (await req.json()) as UseCase; // FABLE-BRIEF M3: zod-validate
+  const json = await req.json().catch(() => null);
+  const parsed = parseUseCase(json); // reject structural garbage; clamp scores/weights
+  if (!parsed.ok) return NextResponse.json({ error: "invalid payload", issues: parsed.issues }, { status: 400 });
+  const payload = parsed.data;
   const ev = evaluate(payload);
   const [row] = await db.update(useCases).set({
     name: payload.name ?? "",
