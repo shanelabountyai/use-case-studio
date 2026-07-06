@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
+import Resend from "next-auth/providers/resend";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/db";
 import { users, accounts, sessions, verificationTokens } from "@/db/schema";
@@ -11,6 +12,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     sessionsTable: sessions,
     verificationTokensTable: verificationTokens,
   }),
-  providers: [Google],
-  // FABLE-BRIEF M1: add a magic-link email provider (Resend) as second option.
+  // Resend reads AUTH_RESEND_KEY automatically (Auth.js env-var convention); the
+  // adapter's verificationTokens table backs the magic-link flow.
+  providers: [Google, Resend],
 });
