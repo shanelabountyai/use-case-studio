@@ -86,7 +86,7 @@ export function ShareManager({ currentId }: { currentId: string | null }) {
             <div style={{ border: `1px solid ${C.line}` }}>
               {links.map((l, i) => (
                 <div key={l.token} className="flex items-center gap-2 p-2 flex-wrap" style={{ borderTop: i ? `1px solid ${C.line}` : "none", background: C.surface }}>
-                  <input readOnly value={`${origin}/s/${l.token}`} onFocus={(e) => e.target.select()}
+                  <input readOnly value={`${origin}/s/${l.token}`} onFocus={(e) => e.target.select()} data-testid="share-link-url"
                     style={{ ...inputStyle, flex: 1, minWidth: 180, fontFamily: MONO, fontSize: 11, textDecoration: l.revoked ? "line-through" : "none", color: l.revoked ? C.inkSoft : C.ink }} />
                   {l.revoked ? (
                     <span style={{ fontFamily: MONO, fontSize: 10, color: C.red, border: `1px solid ${C.red}`, padding: "2px 6px" }} className="uppercase">revoked</span>
