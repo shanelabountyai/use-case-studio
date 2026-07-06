@@ -46,13 +46,29 @@ jobs:
         with:
           node-version: 20
       - run: npm install
-      - name: Create Neon branch
+      # DIAGNOSTIC: neondatabase/create-branch-action@v6 was returning a bare
+      # "AxiosError 400" with no body. Calling the Neon API directly so the
+      # real error surfaces — remove/replace once we know what it says.
+      # https://api-docs.neon.tech/reference/createprojectbranch
+      - name: Create Neon branch (diagnostic curl)
         id: neon-branch
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ secrets.NEON_PROJECT_ID }}
-          api_key: ${{ secrets.NEON_API_KEY }}
-          branch_name: ci-integration-${{ github.run_id }}
+        run: |
+          set -e
+          BRANCH_NAME="ci-integration-${{ github.run_id }}"
+          HTTP_STATUS=$(curl -sS -o /tmp/neon-create-branch.json -w "%{http_code}" \
+            -X POST "https://console.neon.tech/api/v2/projects/${{ secrets.NEON_PROJECT_ID }}/branches" \
+            -H "Authorization: Bearer ${{ secrets.NEON_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json" \
+            -d "{\"branch\":{\"name\":\"$BRANCH_NAME\"},\"endpoints\":[{\"type\":\"read_write\"}]}")
+          echo "HTTP status: $HTTP_STATUS"
+          echo "Response body:"
+          cat /tmp/neon-create-branch.json
+          echo
+          if [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "::error::Neon branch creation failed with HTTP $HTTP_STATUS — see response body above."
+            exit 1
+          fi
       - name: Apply migrations to the branch
         env:
           DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
@@ -80,13 +96,26 @@ jobs:
       - run: npm install
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
-      - name: Create Neon branch
+      # DIAGNOSTIC: see the matching step in the integration job above.
+      - name: Create Neon branch (diagnostic curl)
         id: neon-branch
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ secrets.NEON_PROJECT_ID }}
-          api_key: ${{ secrets.NEON_API_KEY }}
-          branch_name: ci-e2e-${{ github.run_id }}
+        run: |
+          set -e
+          BRANCH_NAME="ci-e2e-${{ github.run_id }}"
+          HTTP_STATUS=$(curl -sS -o /tmp/neon-create-branch.json -w "%{http_code}" \
+            -X POST "https://console.neon.tech/api/v2/projects/${{ secrets.NEON_PROJECT_ID }}/branches" \
+            -H "Authorization: Bearer ${{ secrets.NEON_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json" \
+            -d "{\"branch\":{\"name\":\"$BRANCH_NAME\"},\"endpoints\":[{\"type\":\"read_write\"}]}")
+          echo "HTTP status: $HTTP_STATUS"
+          echo "Response body:"
+          cat /tmp/neon-create-branch.json
+          echo
+          if [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "::error::Neon branch creation failed with HTTP $HTTP_STATUS — see response body above."
+            exit 1
+          fi
       - name: Apply migrations to the branch
         env:
           DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
