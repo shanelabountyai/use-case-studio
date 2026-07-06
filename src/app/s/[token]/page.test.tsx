@@ -12,6 +12,8 @@ const chain = () => {
   return p;
 };
 vi.mock("@/db", () => ({ db: { select: () => chain() } }));
+// notFound() throws a sentinel we can assert on (real request → HTTP 404).
+vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("NEXT_NOT_FOUND"); } }));
 
 import SharePage from "./page";
 
@@ -21,11 +23,14 @@ beforeEach(() => { queue = []; });
 afterEach(() => cleanup());
 
 describe("public /s/[token]", () => {
-  it("shows a not-available message for a revoked or missing link", async () => {
+  it("404s (notFound) for a revoked or missing link", async () => {
     queue = [[]]; // link lookup (revoked=false filter) matches nothing
-    render(await SharePage({ params }));
-    expect(screen.getByText("This brief isn't available")).toBeTruthy();
-    expect(screen.getByText(/revoked by its owner/)).toBeTruthy();
+    await expect(SharePage({ params })).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("404s when the link resolves but its case is gone", async () => {
+    queue = [[{ token: "tok-123", useCaseId: "uc-1", revoked: false }], []];
+    await expect(SharePage({ params })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   it("renders the full Showcase brief for a live link", async () => {
