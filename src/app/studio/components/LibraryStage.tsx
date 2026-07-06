@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import type { LibraryRecord } from "@/lib/engine";
+import type { LibraryRecord, Verdict } from "@/lib/engine";
 import { C, MONO, btn, inputStyle } from "../theme";
 import { Flag, PanelShell } from "./atoms";
 import { StoreChip, type StoreStatus, verdictColor } from "./panels";
+
+const VERDICT_ORDER: Verdict[] = ["BUILD", "REFINE", "PARK"];
 
 export function LibraryStage({ library, currentId, storeStatus, onLoad, onDelete, onCopy, onDownload, libCsv, register }: {
   library: LibraryRecord[];
@@ -41,22 +43,33 @@ export function LibraryStage({ library, currentId, storeStatus, onLoad, onDelete
         {library.length === 0 ? (
           <p className="text-sm" style={{ color: C.inkSoft }}>Nothing saved yet. Evaluate a case, then hit &ldquo;Save to library.&rdquo;</p>
         ) : (
-          <div style={{ border: `1px solid ${C.line}` }}>
-            {library.map((r, i) => {
-              const vc = verdictColor(r.verdict);
+          /* Grouped by verdict (BUILD → REFINE → PARK); empty groups are hidden. */
+          VERDICT_ORDER.map((v) => ({ v, rows: library.filter((r) => r.verdict === v) }))
+            .filter((g) => g.rows.length)
+            .map((g) => {
+              const vc = verdictColor(g.v);
               return (
-                <div key={r.id} className="flex items-center gap-3 p-3 flex-wrap" style={{ borderTop: i ? `1px solid ${C.line}` : "none", background: r.id === currentId ? C.blueSoft : C.surface }}>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: "#fff", background: vc, padding: "2px 6px" }}>{r.verdict}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold truncate">{r.uc.name || "Untitled"}</div>
-                    <div style={{ fontFamily: MONO, fontSize: 10, color: C.inkSoft }}>{r.composite}/100 · {r.quadrant.toLowerCase()} · {new Date(r.savedAt).toLocaleString()}</div>
+                <div key={g.v} className="mb-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span style={{ fontFamily: MONO, fontSize: 11, color: "#fff", background: vc, padding: "2px 6px" }}>{g.v}</span>
+                    <span style={{ fontFamily: MONO, fontSize: 10, color: C.inkSoft }}>{g.rows.length} case{g.rows.length > 1 ? "s" : ""}</span>
                   </div>
-                  <button onClick={() => onLoad(r)} style={btn(C.surface, C.ink, `1px solid ${C.ink}`)}>LOAD</button>
-                  <button onClick={() => onDelete(r.id)} style={btn("transparent", C.red, `1px solid ${C.red}`)}>DELETE</button>
+                  <div style={{ border: `1px solid ${C.line}` }}>
+                    {g.rows.map((r, i) => (
+                      <div key={r.id} className="flex items-center gap-3 p-3 flex-wrap" style={{ borderTop: i ? `1px solid ${C.line}` : "none", background: r.id === currentId ? C.blueSoft : C.surface }}>
+                        <span style={{ fontFamily: MONO, fontSize: 11, color: "#fff", background: vc, padding: "2px 6px" }}>{r.verdict}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold truncate">{r.uc.name || "Untitled"}</div>
+                          <div style={{ fontFamily: MONO, fontSize: 10, color: C.inkSoft }}>{r.composite}/100 · {r.quadrant.toLowerCase()} · {new Date(r.savedAt).toLocaleString()}</div>
+                        </div>
+                        <button onClick={() => onLoad(r)} style={btn(C.surface, C.ink, `1px solid ${C.ink}`)}>LOAD</button>
+                        <button onClick={() => onDelete(r.id)} style={btn("transparent", C.red, `1px solid ${C.red}`)}>DELETE</button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               );
-            })}
-          </div>
+            })
         )}
       </PanelShell>
 

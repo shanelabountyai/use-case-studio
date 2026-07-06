@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { C, MONO, btn } from "../theme";
 import { PanelShell } from "./atoms";
 import { SaveBar, type StoreStatus } from "./panels";
+import { ShareManager } from "./ShareManager";
 
 export function ExportStage({ ucName, prompt, obsNote, obsEntry, copied, currentId, storeStatus, onSave, onNew, onOpenShowcase, onExportJson, onImportFile, onCopy, onDownload, currentCsv, safeFile }: {
   ucName: string;
@@ -39,6 +40,7 @@ export function ExportStage({ ucName, prompt, obsNote, obsEntry, copied, current
           <input ref={fileRef} type="file" accept="application/json" onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportFile(f); e.target.value = ""; }} className="hidden" aria-label="Import session JSON" />
         </div>
       </PanelShell>
+      <ShareManager currentId={currentId} />
       <PanelShell n="04·C" title="Reusable prompt — seeded with this case">
         <p className="text-sm leading-relaxed mb-3">The same intake → evaluation → recommendation logic as a portable prompt, pre-filled with your current inputs. Runs in any capable LLM chat.</p>
         <button onClick={() => onCopy(prompt, "Prompt")} style={btn(copied ? C.green : C.blue, "#fff")} className="mb-3">{copied ? "COPIED ✓" : "COPY PROMPT"}</button>
