@@ -17,7 +17,7 @@ const renderStage = (uc: UseCase, over: Partial<Parameters<typeof DeliverStage>[
     uc, ev: evaluate(uc), engagement: blankEngagement(),
     setEngagement: vi.fn(), currentId: null as string | null,
     storeStatus: "connected" as const, onSave: vi.fn(), onNew: vi.fn(),
-    onCopy: vi.fn(), onDownload: vi.fn(), safeFile: (n: string) => n || "use-case",
+    onCopy: vi.fn(), onDownload: vi.fn(), safeFile: (n: string) => n || "use-case", onDownloadPptx: vi.fn(),
     ...over,
   };
   render(<DeliverStage {...props} />);
@@ -103,5 +103,11 @@ describe("DeliverStage — DK-4 exports", () => {
     // The engagement panel heading sits inside a .no-print wrapper.
     const panel = screen.getByText("Engagement inputs").closest(".no-print");
     expect(panel).not.toBeNull();
+  });
+
+  it("triggers the PowerPoint export via onDownloadPptx", () => {
+    const { onDownloadPptx } = renderStage(EXAMPLES[0]);
+    fireEvent.click(screen.getByText("DOWNLOAD POWERPOINT"));
+    expect(onDownloadPptx).toHaveBeenCalledTimes(1);
   });
 });

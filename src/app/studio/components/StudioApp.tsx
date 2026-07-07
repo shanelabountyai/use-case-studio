@@ -9,6 +9,7 @@ import {
 import { EXAMPLES } from "@/lib/examples";
 import { buildRegister } from "@/lib/register";
 import { blankEngagement, type EngagementInputs } from "@/lib/deliverykit";
+import { buildDeck } from "@/lib/deck";
 import { C, MONO, SANS, btn } from "../theme";
 import { CaptureStage } from "./CaptureStage";
 import { EvaluateStage } from "./EvaluateStage";
@@ -195,6 +196,19 @@ export default function StudioApp() {
   const doDownload = (filename: string, text: string, mime: string) => {
     if (!download(filename, text, mime)) flash("Download blocked — use Copy instead");
   };
+  // PowerPoint export: pptxgenjs is loaded lazily (client-only) so it never
+  // enters SSR or the base bundle. The deck is built from the same engine
+  // evaluation + kit builders; failures are surfaced honestly.
+  const doDownloadPptx = async () => {
+    try {
+      const { renderDeck } = await import("@/lib/deck-pptx");
+      const deck = buildDeck(uc, ev, engagement);
+      await renderDeck(deck).writeFile({ fileName: `${safeFile(uc.name)}-delivery-kit.pptx` });
+      flash("PowerPoint downloaded");
+    } catch {
+      flash("PowerPoint export failed — use Markdown or Print instead");
+    }
+  };
   const obsSavedAt = library.find((r) => r.id === currentId)?.savedAt;
   const register = () => buildRegister(library.length ? library : [currentRecord()]);
 
@@ -267,7 +281,7 @@ export default function StudioApp() {
           <DeliverStage
             uc={uc} ev={ev} engagement={engagement} setEngagement={setEngagement}
             currentId={currentId} storeStatus={storeStatus} onSave={saveToLibrary} onNew={newCase}
-            onCopy={doCopy} onDownload={doDownload} safeFile={safeFile}
+            onCopy={doCopy} onDownload={doDownload} safeFile={safeFile} onDownloadPptx={doDownloadPptx}
           />
         )}
 

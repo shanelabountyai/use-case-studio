@@ -22,7 +22,7 @@ const COMMERCIAL_MODELS = ["Fixed fee", "Time & materials", "Retainer"];
      deps), and a print stylesheet (mirroring ShowcaseBrief) so SAVE AS PDF
      prints the readiness note + four deliverables — the editing chrome
      (engagement form, save bar, studio header/nav) is marked `.no-print`. */
-export function DeliverStage({ uc, ev, engagement, setEngagement, currentId, storeStatus, onSave, onNew, onCopy, onDownload, safeFile }: {
+export function DeliverStage({ uc, ev, engagement, setEngagement, currentId, storeStatus, onSave, onNew, onCopy, onDownload, safeFile, onDownloadPptx }: {
   uc: UseCase;
   ev: Evaluation;
   engagement: EngagementInputs;
@@ -34,6 +34,7 @@ export function DeliverStage({ uc, ev, engagement, setEngagement, currentId, sto
   onCopy: (text: string, label: string) => void;
   onDownload: (filename: string, text: string, mime: string) => void;
   safeFile: (n: string) => string;
+  onDownloadPptx: () => void;
 }) {
   // Pull the readiness note straight from the SOW builder — don't re-derive it.
   const sow = buildSow(uc, engagement);
@@ -64,6 +65,7 @@ export function DeliverStage({ uc, ev, engagement, setEngagement, currentId, sto
         <div className="no-print flex gap-2 flex-wrap">
           <button onClick={() => onDownload(`${safeFile(uc.name)}-delivery-kit.md`, kitMarkdown, "text/markdown")} style={btn(C.blue, "#fff")}>DOWNLOAD MARKDOWN</button>
           <button onClick={() => onCopy(kitMarkdown, "Delivery kit")} style={btn(C.surface, C.ink, `1px solid ${C.ink}`)}>COPY MARKDOWN</button>
+          <button onClick={onDownloadPptx} style={btn(C.blue, "#fff")}>DOWNLOAD POWERPOINT</button>
           <button onClick={() => window.print()} style={btn(C.ink, C.paper)}>SAVE AS PDF</button>
         </div>
       </div>
