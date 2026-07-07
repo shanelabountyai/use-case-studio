@@ -5,16 +5,19 @@ import { buildSow, type EngagementInputs } from "@/lib/deliverykit";
 import { C, MONO, inputStyle } from "../theme";
 import { Field, PanelShell, TextIn } from "./atoms";
 import { SaveBar, type StoreStatus } from "./panels";
+import { DeliverSections } from "./DeliverSections";
 
 const COMMERCIAL_MODELS = ["Fixed fee", "Time & materials", "Retainer"];
 
-/* Deliver stage (FABLE-BRIEF-DELIVERY-KIT DK-1). The post-BUILD step:
+/* Deliver stage (FABLE-BRIEF-DELIVERY-KIT DK-1 + DK-2). The post-BUILD step:
    - Shown for any evaluated case; when the verdict isn't BUILD, the SOW's
      own readiness note (buildSow returns it — not re-derived here) is
      surfaced prominently up top.
    - Engagement inputs bind to EngagementInputs and persist on the case
      payload (additive jsonb; the engine ignores them, M3's Zod passthrough
-     carries them). The full four-section kit renders in DK-2. */
+     carries them).
+   - DeliverSections renders the four deliverables (discovery guide, SOW,
+     delivery plan, risk register), each from its structured builder. */
 export function DeliverStage({ uc, ev, engagement, setEngagement, currentId, storeStatus, onSave, onNew }: {
   uc: UseCase;
   ev: Evaluation;
@@ -63,6 +66,8 @@ export function DeliverStage({ uc, ev, engagement, setEngagement, currentId, sto
           </Field>
         </div>
       </PanelShell>
+
+      <DeliverSections uc={uc} engagement={engagement} />
 
       <SaveBar currentId={currentId} storeStatus={storeStatus} onSave={onSave} onNew={onNew} />
     </div>
