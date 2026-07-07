@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Use-Case Discovery — Intake</title>
+<style>
+  :root{
+    --paper:#FBFAF7; --ink:#1A1A1A; --blue:#1F5FA8; --soft:#6B6B6B;
+    --line:#E3E3E0; --tint:#EEF3FA; --amber:#B4780A; --green:#2E7D46;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+    line-height:1.5;font-size:15px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .wrap{max-width:840px;margin:0 auto;padding:40px 28px 80px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--blue);margin:0 0 8px}
+  h1{font-family:var(--serif);font-size:34px;line-height:1.1;margin:0 0 10px;font-weight:700}
+  .lede{color:var(--ink);font-size:15px;margin:0 0 18px}
+  .rules{background:var(--tint);border:1px solid #D5E2F2;border-radius:6px;padding:14px 18px;margin:0 0 10px}
+  .rules p{margin:6px 0}
+  .rules b{color:var(--blue)}
+  details{border:1px solid var(--line);border-radius:8px;background:#fff;margin:14px 0;overflow:hidden}
+  details[open]{box-shadow:0 1px 4px rgba(0,0,0,.05)}
+  summary{cursor:pointer;list-style:none;padding:14px 18px;font-family:var(--serif);
+    font-size:20px;font-weight:700;display:flex;align-items:baseline;gap:10px;background:#fff}
+  summary::-webkit-details-marker{display:none}
+  summary .num{font-family:var(--mono);font-size:13px;color:var(--blue);font-weight:400}
+  summary .fields{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--soft);
+    letter-spacing:.04em;font-weight:400;text-align:right;max-width:42%}
+  .body{padding:6px 18px 20px}
+  .label{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--blue);margin:14px 0 6px}
+  ul.ask-list{margin:6px 0 6px 2px;padding-left:18px}
+  ul.ask-list li{margin:5px 0}
+  .probe{background:#FBF3E2;border:1px solid #EAD9AE;border-radius:5px;padding:10px 14px;margin:8px 0}
+  .probe .label{color:var(--amber);margin-top:0}
+  .probe ul{margin:4px 0 0;padding-left:18px}
+  .field{margin:9px 0}
+  .field label.flabel{display:block;font-weight:600;font-size:14px;margin-bottom:3px}
+  .field .hint{color:var(--soft);font-weight:400;font-size:12px}
+  input[type=text], textarea{width:100%;border:1px solid var(--line);border-radius:5px;
+    padding:8px 10px;font-family:var(--sans);font-size:14px;background:#fff;color:var(--ink)}
+  textarea{min-height:52px;resize:vertical}
+  .menu{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+  .menu label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);
+    border-radius:20px;padding:5px 12px;font-size:13px;font-weight:400;cursor:pointer;background:#fff}
+  .menu input{accent-color:var(--blue)}
+  .menu label:has(input:checked){background:var(--tint);border-color:var(--blue);color:var(--blue);font-weight:600}
+  .meta{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin:0 0 4px}
+  .meta .field{margin:2px 0}
+  .foot{margin-top:26px;padding-top:14px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:11px;color:var(--soft);line-height:1.6}
+  .toolbar{position:sticky;top:0;background:var(--paper);padding:10px 0;margin-bottom:6px;z-index:5;display:flex;gap:10px;flex-wrap:wrap}
+  button.print{font-family:var(--mono);font-size:12px;letter-spacing:.05em;text-transform:uppercase;
+    background:var(--ink);color:#fff;border:none;border-radius:5px;padding:9px 16px;cursor:pointer}
+  button.toggle{font-family:var(--mono);font-size:12px;letter-spacing:.05em;text-transform:uppercase;
+    background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:9px 16px;cursor:pointer}
+  button.submit{font-family:var(--mono);font-size:12px;letter-spacing:.05em;text-transform:uppercase;
+    background:var(--blue);color:#fff;border:none;border-radius:5px;padding:11px 20px;cursor:pointer}
+  button.submit:disabled{opacity:.6;cursor:default}
+  .submitbar{margin-top:26px;padding:18px;border:1px solid var(--line);border-radius:8px;background:#fff;
+    display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .submitbar .note{font-size:12.5px;color:var(--soft);flex:1;min-width:200px}
+  #status{margin-top:12px;font-size:13.5px}
+  #status.err{color:#B23A3A}
+  .done{background:#EAF5EE;border:1px solid #BFE3CC;border-radius:8px;padding:22px;text-align:center;margin-top:20px}
+  .done h2{font-family:var(--serif);color:var(--green);margin:0 0 6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="toolbar">
+    <button type="button" class="print" onclick="window.print()">Print / Save PDF</button>
+    <button type="button" class="toggle" onclick="document.querySelectorAll('details').forEach(d=>d.open=true)">Expand all</button>
+    <button type="button" class="toggle" onclick="document.querySelectorAll('details').forEach(d=>d.open=false)">Collapse all</button>
+    <button type="button" class="toggle" onclick="downloadAnswers()">Download my answers</button>
+  </div>
+
+  <p class="eyebrow">AI Use-Case Studio · Discovery</p>
+  <h1>Discovery Intake</h1>
+  <p class="lede">Fill this out to describe an AI use case you'd like evaluated. When you're done, hit <b>Submit</b> at the bottom and it goes straight to the practitioner — who'll run it through the studio and return a build / refine / park recommendation with a delivery plan.</p>
+
+  <div class="rules">
+    <p><b>1. Estimates are fine — just label them as estimates.</b> A rough number you flag as a guess is more useful than a blank.</p>
+    <p><b>2. Try to land a measurable acceptance bar.</b> A single number or threshold that would let everyone agree "this works."</p>
+  </div>
+
+  <form id="guide">
+    <input type="hidden" name="access_key" value="4127351a-987f-4ad2-bd0b-05ae9a451cf1">
+    <input type="hidden" name="subject" value="New AI Use-Case Discovery submission">
+    <input type="hidden" name="from_name" value="AI Use-Case Discovery Intake">
+    <input type="checkbox" name="botcheck" style="display:none" tabindex="-1" autocomplete="off">
+
+    <details open>
+      <summary><span class="num">00</span> Who's filling this out</summary>
+      <div class="body">
+        <div class="meta">
+          <div class="field"><label class="flabel">Company / organization</label><input type="text" name="Company"></div>
+          <div class="field"><label class="flabel">Your name</label><input type="text" name="Your name"></div>
+          <div class="field"><label class="flabel">Your email <span class="hint">(so we can reply)</span></label><input type="text" name="email"></div>
+          <div class="field"><label class="flabel">Date</label><input type="text" name="Date"></div>
+        </div>
+      </div>
+    </details>
+
+    <details open>
+      <summary><span class="num">01</span> Business understanding <span class="fields">Problem · Current cost · Users · Outcome · Acceptance bar</span></summary>
+      <div class="body">
+        <div class="label">Consider</div>
+        <ul class="ask-list">
+          <li>What decision or outcome does this use case change, and who owns that outcome?</li>
+          <li>What does the current process cost today — hours, dollars, error rate — and how is that measured?</li>
+          <li>What happens if you do nothing for another year?</li>
+        </ul>
+        <div class="probe">
+          <div class="label">If you're not sure</div>
+          <ul>
+            <li><b>Cost not quantified?</b> Walk through a recent week — roughly how many hours, and how much rework?</li>
+            <li><b>No acceptance bar yet?</b> What single number or threshold would let everyone agree this works?</li>
+          </ul>
+        </div>
+        <div class="field"><label class="flabel">Problem <span class="hint">(1–2 sentences)</span></label><textarea name="Problem"></textarea></div>
+        <div class="field"><label class="flabel">Current cost of the status quo <span class="hint">(label estimates)</span></label><input type="text" name="Current cost"></div>
+        <div class="field"><label class="flabel">Users / who's affected</label><input type="text" name="Users"></div>
+        <div class="field"><label class="flabel">Desired outcome</label><textarea name="Desired outcome"></textarea></div>
+        <div class="field"><label class="flabel">Acceptance bar <span class="hint">— a measurable threshold</span></label><textarea name="Acceptance bar"></textarea></div>
+      </div>
+    </details>
+
+    <details open>
+      <summary><span class="num">02</span> Data <span class="fields">Sources · Format · Volume · Sensitivity · Freshness</span></summary>
+      <div class="body">
+        <div class="label">Consider</div>
+        <ul class="ask-list">
+          <li>Where does the data live today, who owns access, and how is it granted?</li>
+          <li>How clean are the sources really — vs. how clean everyone assumes they are?</li>
+          <li>Are there examples of correct / incorrect outcomes that could become an evaluation set?</li>
+        </ul>
+        <div class="field"><label class="flabel">Data sources</label><input type="text" name="Data sources"></div>
+        <div class="field"><label class="flabel">Format</label>
+          <div class="menu">
+            <label><input type="radio" name="Data format" value="Documents / unstructured">Documents / unstructured</label>
+            <label><input type="radio" name="Data format" value="Structured (tables, DBs)">Structured (tables, DBs)</label>
+            <label><input type="radio" name="Data format" value="Mixed">Mixed</label>
+            <label><input type="radio" name="Data format" value="Little-or-none yet">Little-or-none yet</label>
+          </div>
+        </div>
+        <div class="field"><label class="flabel">Volume</label>
+          <div class="menu">
+            <label><input type="radio" name="Data volume" value="Small">Small (a few files)</label>
+            <label><input type="radio" name="Data volume" value="Medium">Medium (hundreds–thousands)</label>
+            <label><input type="radio" name="Data volume" value="Large">Large (tens of thousands +)</label>
+          </div>
+        </div>
+        <div class="field"><label class="flabel">Sensitivity</label>
+          <div class="menu">
+            <label><input type="radio" name="Data sensitivity" value="Public">Public</label>
+            <label><input type="radio" name="Data sensitivity" value="Internal / confidential">Internal / confidential</label>
+            <label><input type="radio" name="Data sensitivity" value="Contains PII">Contains PII</label>
+            <label><input type="radio" name="Data sensitivity" value="Regulated (PHI, financial)">Regulated (PHI, financial)</label>
+          </div>
+        </div>
+        <div class="field"><label class="flabel">Freshness</label>
+          <div class="menu">
+            <label><input type="radio" name="Data freshness" value="Static / rarely changes">Static / rarely changes</label>
+            <label><input type="radio" name="Data freshness" value="Updated periodically">Updated periodically</label>
+            <label><input type="radio" name="Data freshness" value="Changes constantly">Changes constantly</label>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details open>
+      <summary><span class="num">03</span> The task <span class="fields">Task shape · Volume</span></summary>
+      <div class="body">
+        <div class="label">Consider</div>
+        <ul class="ask-list"><li>In one sentence, what does the system actually do with each item?</li></ul>
+        <div class="field"><label class="flabel">Task shape</label>
+          <div class="menu">
+            <label><input type="radio" name="Task shape" value="Answer from a knowledge base">Answer from a knowledge base</label>
+            <label><input type="radio" name="Task shape" value="Classify / triage / route">Classify / triage / route</label>
+            <label><input type="radio" name="Task shape" value="Draft or generate content">Draft or generate content</label>
+            <label><input type="radio" name="Task shape" value="Take actions in other systems">Take actions in other systems</label>
+            <label><input type="radio" name="Task shape" value="Run a multi-step process">Run a multi-step process</label>
+          </div>
+        </div>
+        <div class="field"><label class="flabel">Volume</label>
+          <div class="menu">
+            <label><input type="radio" name="Task volume" value="Low (occasional)">Low (occasional)</label>
+            <label><input type="radio" name="Task volume" value="Medium (daily)">Medium (daily)</label>
+            <label><input type="radio" name="Task volume" value="High (constant / at scale)">High (constant / at scale)</label>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details open>
+      <summary><span class="num">04</span> Constraints <span class="fields">Latency · Oversight · Budget · Compliance</span></summary>
+      <div class="body">
+        <div class="label">Consider</div>
+        <ul class="ask-list">
+          <li>What are the hard constraints — latency, budget, regulatory obligations?</li>
+          <li>What level of human oversight is required, and who staffs the review?</li>
+          <li>What existing systems must this fit into, and who controls them?</li>
+        </ul>
+        <div class="field"><label class="flabel">Latency</label>
+          <div class="menu">
+            <label><input type="radio" name="Latency" value="Batch (minutes/hours OK)">Batch (minutes/hours OK)</label>
+            <label><input type="radio" name="Latency" value="Interactive (a few seconds)">Interactive (a few seconds)</label>
+            <label><input type="radio" name="Latency" value="Real-time (sub-second)">Real-time (sub-second)</label>
+          </div>
+        </div>
+        <div class="field"><label class="flabel">Human oversight</label>
+          <div class="menu">
+            <label><input type="radio" name="Oversight" value="Review every output">Review every output</label>
+            <label><input type="radio" name="Oversight" value="Spot-check / sample">Spot-check / sample</label>
+            <label><input type="radio" name="Oversight" value="Fully automated is acceptable">Fully automated is acceptable</label>
+          </div>
+        </div>
+        <div class="field"><label class="flabel">Budget</label><input type="text" name="Budget"></div>
+        <div class="field"><label class="flabel">Compliance obligations</label><input type="text" name="Compliance"></div>
+      </div>
+    </details>
+
+    <details open>
+      <summary><span class="num">05</span> Success &amp; adoption</summary>
+      <div class="body">
+        <div class="label">Consider</div>
+        <ul class="ask-list">
+          <li>Who has to change how they work for this to deliver value — and are they bought in?</li>
+          <li>How would you run a pilot, and what would make you comfortable expanding it?</li>
+          <li>What's been tried before here, and why did it stall?</li>
+        </ul>
+        <div class="field"><label class="flabel">Notes</label><textarea name="Success and adoption notes"></textarea></div>
+      </div>
+    </details>
+
+    <div class="submitbar">
+      <span class="note">Done? Submit sends your answers to the practitioner. Want a copy first? Use <b>Download my answers</b> in the top bar.</span>
+      <button type="submit" class="submit" id="submitBtn">Submit to practitioner</button>
+    </div>
+    <div id="status"></div>
+  </form>
+
+  <div class="done" id="done" style="display:none">
+    <h2>Thanks — your intake was submitted.</h2>
+    <p>The practitioner has your answers and will follow up. You can close this page.</p>
+  </div>
+
+  <p class="foot">A heuristic instrument for structured judgment — decision support, not guarantees. Estimates are labeled as estimates; any statement of work it generates is a draft, not legal advice. CPMAI is a trademark of its respective owner; this tool is independent and not affiliated with or endorsed by them.</p>
+</div>
+
+<script>
+function downloadAnswers(){
+  var form = document.getElementById('guide');
+  var lines = ["AI Use-Case Discovery — submission", ""];
+  var seen = {};
+  Array.prototype.forEach.call(form.elements, function(el){
+    if(!el.name || el.name === 'access_key' || el.name === 'subject' || el.name === 'from_name' || el.name === 'botcheck') return;
+    if(el.type === 'radio'){ if(el.checked) lines.push(el.name + ": " + el.value); return; }
+    if(el.type === 'text' || el.tagName === 'TEXTAREA'){
+      if(seen[el.name]) return; seen[el.name] = 1;
+      lines.push(el.name + ": " + (el.value || ""));
+    }
+  });
+  var blob = new Blob([lines.join("\n") + "\n"], {type:"text/plain"});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = "discovery-answers.txt";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+document.getElementById('guide').addEventListener('submit', async function(e){
+  e.preventDefault();
+  var btn = document.getElementById('submitBtn');
+  var status = document.getElementById('status');
+  status.className = ''; status.textContent = '';
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try{
+    var res = await fetch('https://api.web3forms.com/submit', {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' },
+      body: new FormData(e.target),
+    });
+    var json = await res.json();
+    if(json.success){
+      document.getElementById('guide').style.display = 'none';
+      document.getElementById('done').style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      status.className = 'err';
+      status.textContent = 'Something went wrong sending this. Please use “Download my answers” and email the file instead.';
+      btn.disabled = false; btn.textContent = 'Submit to practitioner';
+    }
+  } catch(err){
+    status.className = 'err';
+    status.textContent = 'Couldn’t reach the server. Please use “Download my answers” and email the file instead.';
+    btn.disabled = false; btn.textContent = 'Submit to practitioner';
+  }
+});
+</script>
+</body>
+</html>
