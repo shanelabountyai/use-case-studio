@@ -208,7 +208,7 @@ export default function StudioApp() {
         button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid ${C.blue};outline-offset:2px;}`}</style>
       <div className="max-w-3xl mx-auto">
 
-        <header className="mb-6">
+        <header className="mb-6 no-print">
           <div className="flex justify-between items-start flex-wrap gap-3">
             <div>
               <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.14em", color: C.blue }} className="uppercase mb-1">Lab Intelligence · decision instrument</div>
@@ -229,7 +229,7 @@ export default function StudioApp() {
           </div>
         </header>
 
-        <nav className="flex mb-6 overflow-x-auto" style={{ borderBottom: `1px solid ${C.line}` }} aria-label="Stages">
+        <nav className="flex mb-6 overflow-x-auto no-print" style={{ borderBottom: `1px solid ${C.line}` }} aria-label="Stages">
           {STAGES.map((s, i) => (
             <button key={s} onClick={() => setStage(i)} className="px-3 sm:px-4 py-2 text-sm whitespace-nowrap" style={{ fontFamily: MONO, letterSpacing: "0.04em", background: "transparent", border: "none", borderBottom: stage === i ? `2px solid ${C.blue}` : "2px solid transparent", color: stage === i ? C.blue : C.inkSoft, cursor: "pointer", fontWeight: stage === i ? 600 : 400 }}>
               {String(i + 1).padStart(2, "0")} {s}{i === 4 && library.length ? ` (${library.length})` : ""}
@@ -267,6 +267,7 @@ export default function StudioApp() {
           <DeliverStage
             uc={uc} ev={ev} engagement={engagement} setEngagement={setEngagement}
             currentId={currentId} storeStatus={storeStatus} onSave={saveToLibrary} onNew={newCase}
+            onCopy={doCopy} onDownload={doDownload} safeFile={safeFile}
           />
         )}
 

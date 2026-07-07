@@ -17,6 +17,7 @@ const renderStage = (uc: UseCase, over: Partial<Parameters<typeof DeliverStage>[
     uc, ev: evaluate(uc), engagement: blankEngagement(),
     setEngagement: vi.fn(), currentId: null as string | null,
     storeStatus: "connected" as const, onSave: vi.fn(), onNew: vi.fn(),
+    onCopy: vi.fn(), onDownload: vi.fn(), safeFile: (n: string) => n || "use-case",
     ...over,
   };
   render(<DeliverStage {...props} />);
@@ -53,5 +54,41 @@ describe("DeliverStage", () => {
     const { setEngagement } = renderStage(EXAMPLES[0]);
     fireEvent.change(screen.getByLabelText("Commercial model"), { target: { value: "Retainer" } });
     expect(setEngagement).toHaveBeenCalledWith(expect.objectContaining({ commercialModel: "Retainer" }));
+  });
+});
+
+describe("DeliverStage — DK-4 exports", () => {
+  it("downloads the delivery kit as markdown, carrying the not-legal-advice disclaimer", () => {
+    const { onDownload } = renderStage(EXAMPLES[0]);
+    fireEvent.click(screen.getByText("DOWNLOAD MARKDOWN"));
+    expect(onDownload).toHaveBeenCalledTimes(1);
+    const [filename, text, mime] = onDownload.mock.calls[0];
+    expect(filename).toMatch(/delivery-kit\.md$/);
+    expect(mime).toBe("text/markdown");
+    expect(text).toMatch(/not legal advice/i);
+  });
+
+  it("copies the same markdown deliverable", () => {
+    const { onCopy } = renderStage(EXAMPLES[0]);
+    fireEvent.click(screen.getByText("COPY MARKDOWN"));
+    expect(onCopy).toHaveBeenCalledTimes(1);
+    const [text] = onCopy.mock.calls[0];
+    expect(text).toMatch(/# Delivery kit/);
+    expect(text).toMatch(/not legal advice/i);
+  });
+
+  it("triggers window.print for SAVE AS PDF", () => {
+    const printSpy = vi.spyOn(window, "print").mockImplementation(() => {});
+    renderStage(EXAMPLES[0]);
+    fireEvent.click(screen.getByText("SAVE AS PDF"));
+    expect(printSpy).toHaveBeenCalledTimes(1);
+    printSpy.mockRestore();
+  });
+
+  it("marks the editing chrome (engagement form, save bar) as no-print", () => {
+    renderStage(EXAMPLES[0]);
+    // The engagement panel heading sits inside a .no-print wrapper.
+    const panel = screen.getByText("Engagement inputs").closest(".no-print");
+    expect(panel).not.toBeNull();
   });
 });
