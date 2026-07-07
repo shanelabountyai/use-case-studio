@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import type { LibraryRecord, Verdict } from "@/lib/engine";
+import { buildPortfolio } from "@/lib/deliverykit";
 import { C, MONO, btn, inputStyle } from "../theme";
-import { Flag, PanelShell } from "./atoms";
+import { Eyebrow, Flag, PanelShell } from "./atoms";
 import { StoreChip, type StoreStatus, verdictColor } from "./panels";
 
 const VERDICT_ORDER: Verdict[] = ["BUILD", "REFINE", "PARK"];
+const QUADRANTS = ["Quick win", "Big bet", "Fill-in", "Money pit"] as const;
 
 export function LibraryStage({ library, currentId, storeStatus, onLoad, onDelete, onCopy, onDownload, libCsv, register }: {
   library: LibraryRecord[];
@@ -21,9 +23,49 @@ export function LibraryStage({ library, currentId, storeStatus, onLoad, onDelete
 }) {
   const [csvOpen, setCsvOpen] = useState(false);
   const [wireOpen, setWireOpen] = useState(false);
+  // `library` is already scoped to the signed-in user (loaded from the
+  // M3-scoped GET /api/use-cases). buildPortfolio runs purely over those rows —
+  // no other user's cases are ever fetched or summarized here.
+  const portfolio = library.length ? buildPortfolio(library) : null;
   return (
     <div>
-      <PanelShell n="05·A" title="Saved use cases">
+      {portfolio && (
+        <PanelShell n="05·A" title="Portfolio">
+          <p className="text-sm leading-relaxed mb-4">{portfolio.narrative}</p>
+
+          <Eyebrow>Quadrant distribution</Eyebrow>
+          <div className="flex gap-2 flex-wrap mt-1 mb-4">
+            {QUADRANTS.map((q) => (
+              <div key={q} style={{ border: `1px solid ${C.line}`, background: C.surface, padding: "8px 12px", minWidth: 96 }}>
+                <div style={{ fontFamily: MONO, fontSize: 20, fontWeight: 600, color: C.blue }}>{portfolio.quadrantCounts[q] || 0}</div>
+                <div style={{ fontFamily: MONO, fontSize: 10, color: C.inkSoft }} className="uppercase">{q}</div>
+              </div>
+            ))}
+          </div>
+
+          <Eyebrow>Ranked by composite</Eyebrow>
+          <div className="mt-1 mb-4" style={{ border: `1px solid ${C.line}` }}>
+            {portfolio.ranked.map((e, i) => (
+              <div key={i} className="flex items-center gap-3 p-2 flex-wrap" style={{ borderTop: i ? `1px solid ${C.line}` : "none", background: C.surface }}>
+                <span style={{ fontFamily: MONO, fontSize: 11, color: C.inkSoft, width: 18 }}>{i + 1}</span>
+                <span style={{ fontFamily: MONO, fontSize: 10, color: "#fff", background: verdictColor(e.verdict), padding: "2px 6px" }}>{e.verdict}</span>
+                <span className="flex-1 min-w-0 text-sm font-semibold truncate">{e.name}</span>
+                <span style={{ fontFamily: MONO, fontSize: 11, color: C.ink }}>{e.composite}/100</span>
+                <span style={{ fontFamily: MONO, fontSize: 10, color: C.inkSoft }} className="uppercase whitespace-nowrap">{e.quadrant}</span>
+              </div>
+            ))}
+          </div>
+
+          <Eyebrow>Recommended sequencing</Eyebrow>
+          {portfolio.sequencing.length ? (
+            <ol className="ml-5 mt-1">{portfolio.sequencing.map((s, i) => <li key={i} className="text-sm leading-relaxed list-decimal mb-1">{s}</li>)}</ol>
+          ) : (
+            <p className="text-sm mt-1" style={{ color: C.inkSoft }}>No non-parked cases to sequence yet — resolve the blockers on parked cases first.</p>
+          )}
+        </PanelShell>
+      )}
+
+      <PanelShell n={portfolio ? "05·B" : "05·A"} title="Saved use cases">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
           <StoreChip status={storeStatus} />
           <div className="flex gap-2 flex-wrap">
@@ -73,7 +115,7 @@ export function LibraryStage({ library, currentId, storeStatus, onLoad, onDelete
         )}
       </PanelShell>
 
-      <PanelShell n="05·B" title="Send results to an external store">
+      <PanelShell n={portfolio ? "05·C" : "05·B"} title="Send results to an external store">
         <p className="text-sm leading-relaxed mb-2">This app deliberately holds no third-party credentials, so it doesn&apos;t call Google Sheets, Notion, or your Obsidian vault directly. The honest route keeps your secrets in your own connectors:</p>
         <button onClick={() => setWireOpen((o) => !o)} style={btn(C.surface, C.ink, `1px solid ${C.ink}`)} className="mb-3">{wireOpen ? "HIDE STEPS" : "SHOW WIRING STEPS"}</button>
         {wireOpen && (

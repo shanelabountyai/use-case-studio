@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, cleanup, within } from "@testing-library/react";
 import { evaluate } from "@/lib/engine";
 import { EXAMPLES } from "@/lib/examples";
 import StudioApp from "./StudioApp";
@@ -60,9 +60,12 @@ describe("StudioApp — library wiring", () => {
     await waitFor(() => expect(screen.getAllByText("persistent store: on").length).toBeGreaterThan(0));
     fireEvent.click(screen.getByText("SAVE TO LIBRARY"));
     await waitFor(() => expect(screen.getByText("Saved to library")).toBeTruthy());
-    // Verdict shown for the saved record comes from the server response
+    // Verdict shown for the saved record comes from the server response.
+    // "77/100" now appears in both the Portfolio summary and the saved list,
+    // so scope the check to the "Saved use cases" panel.
     fireEvent.click(screen.getByText(/05 Library \(1\)/));
-    expect(screen.getByText(/77\/100/)).toBeTruthy();
+    const savedPanel = screen.getByText("Saved use cases").closest("section") as HTMLElement;
+    expect(within(savedPanel).getByText(/77\/100/)).toBeTruthy();
   });
 
   it("keeps the record locally and says so plainly when the save POST fails", async () => {
