@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup, within } from "@testing-library/react";
 import { evaluate } from "@/lib/engine";
 import { EXAMPLES } from "@/lib/examples";
+import { blankEngagement } from "@/lib/deliverykit";
 import StudioApp from "./StudioApp";
 
 /* The port's new logic is the API-backed library: optimistic save with the
@@ -120,5 +121,46 @@ describe("StudioApp — library wiring", () => {
     // Mode toggle returns to practitioner view
     fireEvent.click(screen.getByText("PRACTITIONER VIEW"));
     expect(screen.getByText("AI Use-Case Studio")).toBeTruthy();
+  });
+});
+
+describe("StudioApp — DK-5 engagement round-trip", () => {
+  it("carries the Deliver stage's Client field into the save POST body's engagement key", async () => {
+    let capturedBody: string | undefined;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/use-cases" && !init?.method) return ok([]);
+      if (url === "/api/use-cases" && init?.method === "POST") {
+        capturedBody = init.body as string;
+        return ok(serverRow(), 201);
+      }
+      throw new Error(`unexpected fetch ${url} ${init?.method}`);
+    });
+    render(<StudioApp />);
+    await waitFor(() => expect(screen.getAllByText("persistent store: on").length).toBeGreaterThan(0));
+
+    fireEvent.click(screen.getByText(/06 Deliver/));
+    fireEvent.change(screen.getByPlaceholderText("e.g. Acme Corp"), { target: { value: "RoundTrip Client" } });
+    fireEvent.click(screen.getByText("SAVE TO LIBRARY"));
+
+    await waitFor(() => expect(capturedBody).toBeTruthy());
+    const parsed = JSON.parse(capturedBody as string);
+    expect(parsed.engagement.client).toBe("RoundTrip Client");
+  });
+
+  it("reads a saved record's engagement back into the Deliver stage's Client field on load", async () => {
+    const savedEngagement = { ...blankEngagement(), client: "RoundTrip Co" };
+    const row = serverRow({ payload: { ...EXAMPLES[0], engagement: savedEngagement } });
+    fetchMock.mockImplementation((url: string) => {
+      if (url === "/api/use-cases") return ok([row]);
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    render(<StudioApp />);
+    await waitFor(() => expect(screen.getAllByText("persistent store: on").length).toBeGreaterThan(0));
+
+    fireEvent.click(screen.getByText(/05 Library/));
+    fireEvent.click(screen.getByText("LOAD"));
+    fireEvent.click(screen.getByText(/06 Deliver/));
+
+    expect(screen.getByDisplayValue("RoundTrip Co")).toBeTruthy();
   });
 });

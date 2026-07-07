@@ -46,7 +46,11 @@ test.describe("acceptance-bar journey", () => {
       await reissueSession(context, session.userId);
       await page.goto("/studio");
       await page.getByText(/05 Library/).click();
-      await expect(page.getByText(caseName)).toBeVisible();
+      // Scope to the "Saved use cases" panel: since DK-3, the case name also
+      // renders in the Portfolio summary (ranked list + sequencing), so an
+      // unscoped getByText(caseName) is ambiguous.
+      const savedPanel = page.locator("section", { hasText: "Saved use cases" });
+      await expect(savedPanel.getByText(caseName)).toBeVisible();
     } finally {
       await destroyTestSession(session.userId);
     }

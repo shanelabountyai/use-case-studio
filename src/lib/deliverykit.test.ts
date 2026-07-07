@@ -56,15 +56,43 @@ describe("risk register", () => {
 });
 
 describe("portfolio", () => {
+  const mk = (name: string, composite: number, quadrant: string, verdict: any): LibraryRecord =>
+    ({ id: name, savedAt: "2026-07-05T00:00:00Z", uc: { ...policy(), name }, verdict, composite, quadrant });
+
   it("ranks by composite and sequences quick wins first", () => {
-    const mk = (name: string, composite: number, quadrant: string, verdict: any): LibraryRecord =>
-      ({ id: name, savedAt: "2026-07-05T00:00:00Z", uc: { ...policy(), name }, verdict, composite, quadrant });
     const p = buildPortfolio([
       mk("Big", 72, "Big bet", "BUILD"),
       mk("Quick", 68, "Quick win", "BUILD"),
     ]);
     expect(p.ranked[0].name).toBe("Big");            // ranked by score
     expect(p.sequencing[0]).toContain("Quick");      // sequenced quick-win first
+  });
+
+  it("pins ranked order to composite DESC across a mixed set of five entries", () => {
+    const p = buildPortfolio([
+      mk("Mid", 55, "Fill-in", "REFINE"),
+      mk("Top", 91, "Big bet", "BUILD"),
+      mk("Bottom", 12, "Money pit", "PARK"),
+      mk("SecondHighest", 80, "Quick win", "BUILD"),
+      mk("ThirdHighest", 70, "Fill-in", "REFINE"),
+    ]);
+    expect(p.ranked.map((e) => e.name)).toEqual(["Top", "SecondHighest", "ThirdHighest", "Mid", "Bottom"]);
+    expect(p.quadrantCounts).toEqual({ "Fill-in": 2, "Big bet": 1, "Money pit": 1, "Quick win": 1 });
+  });
+
+  it("excludes PARK-verdict cases from sequencing even when quadrant-labeled Quick win, and still puts quick wins first among the rest", () => {
+    const p = buildPortfolio([
+      mk("BigBet", 95, "Big bet", "BUILD"),
+      mk("ParkedQuickWin", 99, "Quick win", "PARK"), // highest composite, but PARK — must be excluded
+      mk("RealQuickWin", 40, "Quick win", "BUILD"),
+      mk("FillIn", 60, "Fill-in", "REFINE"),
+    ]);
+    expect(p.sequencing).toEqual([
+      "RealQuickWin — quick win (40/100)",
+      "BigBet — big bet (95/100)",
+      "FillIn — fill-in (60/100)",
+    ]);
+    expect(p.sequencing.some((s) => s.startsWith("ParkedQuickWin"))).toBe(false);
   });
 });
 

@@ -96,4 +96,15 @@ describe("LibraryStage — Portfolio summary (DK-3)", () => {
     renderLib([rec("1", "Parked", "PARK", 20, "Money pit")]);
     expect(within(portfolioPanel()).getByText(/No non-parked cases to sequence/)).toBeTruthy();
   });
+
+  it("excludes a PARK case from sequencing even when its quadrant is labeled Quick win", () => {
+    renderLib([
+      rec("1", "ParkedQuickWin", "PARK", 99, "Quick win"),
+      rec("2", "RealQuickWin", "BUILD", 40, "Quick win"),
+    ]);
+    const pf = within(portfolioPanel());
+    const items = pf.getAllByRole("listitem").map((li) => li.textContent || "");
+    expect(items.some((t) => t.includes("ParkedQuickWin"))).toBe(false);
+    expect(items.some((t) => t.includes("RealQuickWin"))).toBe(true);
+  });
 });

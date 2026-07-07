@@ -55,6 +55,19 @@ describe("DeliverStage", () => {
     fireEvent.change(screen.getByLabelText("Commercial model"), { target: { value: "Retainer" } });
     expect(setEngagement).toHaveBeenCalledWith(expect.objectContaining({ commercialModel: "Retainer" }));
   });
+
+  it("renders the full stage without throwing for a PARK case — readiness note plus all four deliverable panels", () => {
+    const uc = parkCase();
+    expect(evaluate(uc).verdict).toBe("PARK");
+    renderStage(uc);
+    // Readiness note surfaced prominently (DK-1).
+    expect(screen.getByText(/verdict is PARK, not BUILD/)).toBeTruthy();
+    // All four DK-2 deliverable panels still render for a non-BUILD case.
+    expect(screen.getByText("Discovery guide")).toBeTruthy();
+    expect(screen.getByText("Statement of work")).toBeTruthy();
+    expect(screen.getByText("CPMAI-aligned delivery plan")).toBeTruthy();
+    expect(screen.getByText("Risk register")).toBeTruthy();
+  });
 });
 
 describe("DeliverStage — DK-4 exports", () => {
