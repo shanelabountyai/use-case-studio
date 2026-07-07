@@ -54,7 +54,10 @@ describe("DeliverSections — delivery plan", () => {
     const plan = buildDeliveryPlan(uc, blankEngagement());
     renderSections(uc);
     plan.phases.forEach((p) => expect(screen.getByText(p.phase)).toBeTruthy());
+    // The note carries both the v7 confirm line and the CPMAI trademark /
+    // independence disclaimer (single-sourced from buildDeliveryPlan.note).
     expect(screen.getByText(/confirm exact wording against your current v7 materials/i)).toBeTruthy();
+    expect(screen.getByText(/CPMAI is a trademark of its respective owner; this tool is independent/i)).toBeTruthy();
   });
 });
 

@@ -217,7 +217,7 @@ export function buildDeliveryPlan(uc: UseCase, _eng: EngagementInputs): Delivery
       exitCriteria: "Live performance holds against the bar under the rollout gates, or a documented decision to stop.",
     },
   ];
-  return { phases, note: "Phase labels follow the CPMAI six-phase structure and iterate rather than run strictly linear; confirm exact wording against your current v7 materials." };
+  return { phases, note: "Phase labels follow the CPMAI six-phase structure and iterate rather than run strictly linear; confirm exact wording against your current v7 materials. CPMAI is a trademark of its respective owner; this tool is independent and not affiliated with or endorsed by them." };
 }
 
 /* ------------------------ risk register --------------------- */
