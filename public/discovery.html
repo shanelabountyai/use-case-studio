@@ -88,9 +88,10 @@
   </div>
 
   <form id="guide">
-    <input type="hidden" name="access_key" value="4127351a-987f-4ad2-bd0b-05ae9a451cf1">
-    <input type="hidden" name="subject" value="New AI Use-Case Discovery submission">
-    <input type="hidden" name="from_name" value="AI Use-Case Discovery Intake">
+    <!-- Submissions post to this app's own /api/intake (same origin), which
+         creates a Capture-stage draft in the practitioner's Library. -->
+    <!-- Optional gate: if INTAKE_KEY is set on the server, put the same value here. -->
+    <input type="hidden" name="key" value="">
     <input type="checkbox" name="botcheck" style="display:none" tabindex="-1" autocomplete="off">
 
     <details open>
@@ -258,7 +259,7 @@ function downloadAnswers(){
   var lines = ["AI Use-Case Discovery — submission", ""];
   var seen = {};
   Array.prototype.forEach.call(form.elements, function(el){
-    if(!el.name || el.name === 'access_key' || el.name === 'subject' || el.name === 'from_name' || el.name === 'botcheck') return;
+    if(!el.name || el.name === 'key' || el.name === 'botcheck') return;
     if(el.type === 'radio'){ if(el.checked) lines.push(el.name + ": " + el.value); return; }
     if(el.type === 'text' || el.tagName === 'TEXTAREA'){
       if(seen[el.name]) return; seen[el.name] = 1;
@@ -279,13 +280,13 @@ document.getElementById('guide').addEventListener('submit', async function(e){
   status.className = ''; status.textContent = '';
   btn.disabled = true; btn.textContent = 'Sending…';
   try{
-    var res = await fetch('https://api.web3forms.com/submit', {
+    var res = await fetch('/api/intake', {
       method: 'POST',
       headers: { 'Accept': 'application/json' },
       body: new FormData(e.target),
     });
-    var json = await res.json();
-    if(json.success){
+    var json = await res.json().catch(function(){ return {}; });
+    if(res.ok && json.ok){
       document.getElementById('guide').style.display = 'none';
       document.getElementById('done').style.display = 'block';
       window.scrollTo({ top: 0, behavior: 'smooth' });
