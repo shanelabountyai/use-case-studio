@@ -4,11 +4,16 @@ import { useState } from "react";
 import type { LibraryRecord, Verdict } from "@/lib/engine";
 import { buildPortfolio } from "@/lib/deliverykit";
 import { C, MONO, btn, inputStyle } from "../theme";
-import { Eyebrow, Flag, PanelShell } from "./atoms";
+import { Eyebrow, Flag, PanelShell, SkeletonRows } from "./atoms";
 import { StoreChip, type StoreStatus, verdictColor } from "./panels";
 
 const VERDICT_ORDER: Verdict[] = ["BUILD", "REFINE", "PARK"];
 const QUADRANTS = ["Quick win", "Big bet", "Fill-in", "Money pit"] as const;
+
+/* Intake-sourced cases carry source:"intake" + submitter meta on the jsonb
+   payload (see lib/intake.ts). Neither is on the UseCase type, so read them via
+   a narrow cast rather than widening the engine's type. */
+type IntakeMarked = { source?: string; intake?: { submitterName?: string; company?: string } };
 
 export function LibraryStage({ library, currentId, storeStatus, onLoad, onDelete, onCopy, onDownload, libCsv, register }: {
   library: LibraryRecord[];
@@ -82,8 +87,16 @@ export function LibraryStage({ library, currentId, storeStatus, onLoad, onDelete
             <textarea readOnly value={libCsv()} onFocus={(e) => e.target.select()} style={{ ...inputStyle, fontFamily: MONO, fontSize: 11, height: 160, whiteSpace: "pre" }} />
           </div>
         )}
-        {library.length === 0 ? (
-          <p className="text-sm" style={{ color: C.inkSoft }}>Nothing saved yet. Evaluate a case, then hit &ldquo;Save to library.&rdquo;</p>
+        {library.length === 0 && storeStatus === "loading" ? (
+          /* M5: while the initial /api/use-cases fetch is in flight, showing
+             "Nothing saved yet" would be a lie — skeleton rows instead. */
+          <SkeletonRows rows={3} label="Loading your library…" />
+        ) : library.length === 0 ? (
+          <div className="p-6 text-center" style={{ border: `1px dashed ${C.line}`, background: C.paper }}>
+            <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.1em", color: C.inkSoft }} className="uppercase mb-1">library empty</div>
+            <p className="text-sm" style={{ color: C.ink }}>Nothing saved yet. Evaluate a case, then hit &ldquo;Save to library.&rdquo;</p>
+            <p className="text-xs mt-1" style={{ color: C.inkSoft }}>Client submissions from the discovery intake form land here too, badged FROM INTAKE.</p>
+          </div>
         ) : (
           /* Grouped by verdict (BUILD → REFINE → PARK); empty groups are hidden. */
           VERDICT_ORDER.map((v) => ({ v, rows: library.filter((r) => r.verdict === v) }))
@@ -97,17 +110,26 @@ export function LibraryStage({ library, currentId, storeStatus, onLoad, onDelete
                     <span style={{ fontFamily: MONO, fontSize: 10, color: C.inkSoft }}>{g.rows.length} case{g.rows.length > 1 ? "s" : ""}</span>
                   </div>
                   <div style={{ border: `1px solid ${C.line}` }}>
-                    {g.rows.map((r, i) => (
+                    {g.rows.map((r, i) => {
+                      const im = r.uc as IntakeMarked;
+                      const isIntake = im.source === "intake";
+                      return (
                       <div key={r.id} className="flex items-center gap-3 p-3 flex-wrap" style={{ borderTop: i ? `1px solid ${C.line}` : "none", background: r.id === currentId ? C.blueSoft : C.surface }}>
                         <span style={{ fontFamily: MONO, fontSize: 11, color: "#fff", background: vc, padding: "2px 6px" }}>{r.verdict}</span>
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-semibold truncate">{r.uc.name || "Untitled"}</div>
-                          <div style={{ fontFamily: MONO, fontSize: 10, color: C.inkSoft }}>{r.composite}/100 · {r.quadrant.toLowerCase()} · {new Date(r.savedAt).toLocaleString()}</div>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-sm font-semibold truncate">{r.uc.name || "Untitled"}</span>
+                            {isIntake && (
+                              <span title="Submitted through the discovery intake form — score it to finalize" style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.06em", color: C.blue, background: C.blueSoft, border: `1px solid ${C.blueGrid}`, padding: "1px 5px", whiteSpace: "nowrap" }}>FROM INTAKE</span>
+                            )}
+                          </div>
+                          <div style={{ fontFamily: MONO, fontSize: 10, color: C.inkSoft }}>{r.composite}/100 · {r.quadrant.toLowerCase()}{isIntake && im.intake?.submitterName ? ` · from ${im.intake.submitterName}` : ""} · {new Date(r.savedAt).toLocaleString()}</div>
                         </div>
                         <button onClick={() => onLoad(r)} style={btn(C.surface, C.ink, `1px solid ${C.ink}`)}>LOAD</button>
                         <button onClick={() => onDelete(r.id)} style={btn("transparent", C.red, `1px solid ${C.red}`)}>DELETE</button>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, within } from "@testing-library/react";
-import { blankCase, type LibraryRecord, type Verdict } from "@/lib/engine";
+import { blankCase, type LibraryRecord, type Verdict, type UseCase } from "@/lib/engine";
 import { LibraryStage } from "./LibraryStage";
 
 const rec = (id: string, name: string, verdict: Verdict, composite: number, quadrant = "Quick win"): LibraryRecord => ({
@@ -10,10 +10,10 @@ const rec = (id: string, name: string, verdict: Verdict, composite: number, quad
 });
 
 const noop = () => {};
-const renderLib = (library: LibraryRecord[]) =>
+const renderLib = (library: LibraryRecord[], storeStatus: "loading" | "connected" | "memory" = "connected") =>
   render(
     <LibraryStage
-      library={library} currentId={null} storeStatus="connected"
+      library={library} currentId={null} storeStatus={storeStatus}
       onLoad={noop} onDelete={noop} onCopy={noop} onDownload={noop}
       libCsv={() => "csv"} register={() => "register"}
     />,
@@ -54,12 +54,44 @@ describe("LibraryStage — per-verdict grouping", () => {
   it("shows the empty state (and no Portfolio) when the library has no records", () => {
     renderLib([]);
     expect(screen.getByText(/Nothing saved yet/)).toBeTruthy();
+    expect(screen.getByText(/discovery intake form land here too/)).toBeTruthy();
     expect(screen.queryByText("Portfolio")).toBeNull();
+  });
+
+  /* M5: during the initial fetch the empty library must NOT claim "nothing
+     saved yet" — it doesn't know that yet. Skeleton rows instead. */
+  it("shows a loading skeleton, not the empty state, while the store is loading", () => {
+    renderLib([], "loading");
+    expect(screen.getByRole("status", { name: "Loading your library…" })).toBeTruthy();
+    expect(screen.queryByText(/Nothing saved yet/)).toBeNull();
+  });
+
+  it("does not show the skeleton once records exist, even mid-refresh", () => {
+    renderLib([rec("1", "Alpha", "BUILD", 80)], "loading");
+    expect(screen.queryByRole("status", { name: "Loading your library…" })).toBeNull();
+    expect(within(savedPanel()).getByText("Alpha")).toBeTruthy();
   });
 
   it("still offers whole-library CSV export", () => {
     renderLib([rec("1", "Alpha", "BUILD", 80)]);
     expect(within(savedPanel()).getByText("DOWNLOAD CSV")).toBeTruthy();
+  });
+});
+
+describe("LibraryStage — intake badge", () => {
+  // Intake cases carry source/intake on the jsonb payload, not the UseCase type.
+  const intakeUc = (name: string): UseCase =>
+    ({ ...blankCase(), name, source: "intake", intake: { submitterName: "Dana Lee" } } as unknown as UseCase);
+  const intakeRec = (id: string, name: string): LibraryRecord => ({
+    id, name, savedAt: "2026-07-06T12:00:00.000Z",
+    uc: intakeUc(name), verdict: "BUILD", composite: 50, quadrant: "Quick win",
+  });
+
+  it("badges intake-sourced cases and names the submitter; manual cases have no badge", () => {
+    renderLib([intakeRec("1", "Acme case"), rec("2", "Manual case", "BUILD", 80)]);
+    const saved = within(savedPanel());
+    expect(saved.getAllByText("FROM INTAKE").length).toBe(1); // only the intake row
+    expect(saved.getByText(/from Dana Lee/)).toBeTruthy();
   });
 });
 

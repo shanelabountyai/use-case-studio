@@ -35,6 +35,28 @@ export const Flag = ({ sev, children }: { sev: "critical" | "warn"; children: Re
   </div>
 );
 
+/* M5: loading placeholder rows. Tailwind's animate-pulse does the shimmer;
+   blocks use the line/paper tokens so a skeleton reads as "structure, no data
+   yet" rather than content. Screen readers get the label via role=status;
+   the decorative blocks are aria-hidden. */
+export const SkeletonRows = ({ rows = 3, label = "Loading…" }: { rows?: number; label?: string }) => (
+  <div role="status" aria-label={label}>
+    <span className="sr-only">{label}</span>
+    <div aria-hidden="true" style={{ border: `1px solid ${C.line}` }}>
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex items-center gap-3 p-3 animate-pulse" style={{ borderTop: i ? `1px solid ${C.line}` : "none", background: C.surface }}>
+          <div style={{ width: 52, height: 18, background: C.line }} />
+          <div className="flex-1 min-w-0">
+            <div style={{ width: "40%", height: 12, background: C.line, marginBottom: 6 }} />
+            <div style={{ width: "65%", height: 9, background: C.paper, border: `1px solid ${C.line}` }} />
+          </div>
+          <div style={{ width: 56, height: 28, background: C.paper, border: `1px solid ${C.line}` }} />
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
 export const PanelShell = ({ n, title, children }: { n: string; title: string; children: React.ReactNode }) => (
   <section className="mb-6 p-5" style={{ background: C.surface, border: `1px solid ${C.line}` }}>
     <div className="flex items-baseline gap-3 mb-3">

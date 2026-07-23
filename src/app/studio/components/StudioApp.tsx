@@ -218,8 +218,8 @@ export default function StudioApp() {
 
   return (
     <div style={{ background: C.paper, minHeight: "100vh", fontFamily: SANS, color: C.ink }} className="px-4 py-6 sm:px-8">
-      <style>{`input[type=range]{accent-color:${C.blue};}
-        button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid ${C.blue};outline-offset:2px;}`}</style>
+      {/* Focus rings + range accent moved to globals.css (M5) so the showcase
+          early-return path, /s/[token], and the error pages get them too. */}
       <div className="max-w-3xl mx-auto">
 
         <header className="mb-6 no-print">
@@ -285,7 +285,7 @@ export default function StudioApp() {
           />
         )}
 
-        {toast && <div style={{ position: "fixed", bottom: 16, left: "50%", transform: "translateX(-50%)", background: C.ink, color: C.paper, fontFamily: MONO, fontSize: 12, padding: "8px 14px", zIndex: 50 }} role="status">{toast}</div>}
+        {toast && <div style={{ position: "fixed", bottom: 16, left: "50%", transform: "translateX(-50%)", background: C.ink, color: C.paper, fontFamily: MONO, fontSize: 12, padding: "8px 14px", zIndex: 50, maxWidth: "calc(100vw - 32px)", textAlign: "center" }} role="status">{toast}</div>}
 
         <footer className="mt-8 pt-4 text-xs flex justify-between flex-wrap gap-2" style={{ borderTop: `1px solid ${C.line}`, color: C.inkSoft, fontFamily: MONO }}>
           <span>Heuristic instrument — outputs are defensible starting points, not guarantees.</span>

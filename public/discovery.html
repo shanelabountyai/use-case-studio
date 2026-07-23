@@ -67,6 +67,10 @@
   #status.err{color:#B23A3A}
   .done{background:#EAF5EE;border:1px solid #BFE3CC;border-radius:8px;padding:22px;text-align:center;margin-top:20px}
   .done h2{font-family:var(--serif);color:var(--green);margin:0 0 6px}
+  /* M5 polish (mirrors the app's globals.css): keyboard-only focus rings,
+     and 16px inputs under 640px so iOS Safari doesn't auto-zoom on focus. */
+  :focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+  @media (max-width:640px){ input[type=text],textarea{font-size:16px} }
 </style>
 </head>
 <body>

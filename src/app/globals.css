@@ -1,1 +1,47 @@
 @import "tailwindcss";
+
+/* =============================================================
+   M5 polish: global interaction affordances.
+
+   These live here — not in per-component inline <style> tags — so EVERY
+   route gets them: the studio, the ShowcaseBrief early-return path (which
+   previously rendered before StudioApp's inline focus styles), the public
+   /s/[token] brief, and the error pages. Color values are the theme.ts
+   tokens (blueprint blue #1D46C8), hardcoded because CSS can't import TS.
+   ============================================================= */
+
+/* Keyboard focus: a visible ring on every interactive element. :focus-visible
+   keeps it keyboard-only — mouse clicks don't paint rings. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 2px solid #1d46c8;
+  outline-offset: 2px;
+}
+
+input[type="range"] {
+  accent-color: #1d46c8;
+}
+
+/* Mobile: inputs below 16px trigger iOS Safari's auto-zoom on focus, which
+   is the single most jarring small-screen behavior in the app. Bumping only
+   under 640px leaves the desktop density untouched. */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Touch devices only: minimum tap-target height (per WCAG 2.5.8 / platform
+   HIG guidance). Gated on pointer:coarse so desktop layouts keep their
+   compact buttons. */
+@media (pointer: coarse) {
+  button {
+    min-height: 44px;
+  }
+}
