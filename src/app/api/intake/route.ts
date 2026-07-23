@@ -4,7 +4,8 @@ import { db } from "@/db";
 import { useCases, users } from "@/db/schema";
 import { evaluate } from "@/lib/engine";
 import { parseUseCase } from "@/lib/validation";
-import { intakeToPayload, isBotSubmission, hasMinimumContent, type IntakeAnswers } from "@/lib/intake";
+import { intakeToPayload, isBotSubmission, hasMinimumContent, type IntakeAnswers, type IntakePayload } from "@/lib/intake";
+import { sendIntakeNotification } from "@/lib/notify";
 
 export const runtime = "nodejs"; // Neon HTTP driver + FormData parsing
 
@@ -104,6 +105,14 @@ export async function POST(req: Request) {
     quadrant: ev.quadrant,
     payload,
   });
+
+  /* Best-effort "new intake" email to the practitioner (the DB write above is
+     the source of truth — replacing the old web3forms email-only flow left
+     submissions landing silently in the Library). Awaited because serverless
+     gives no reliable fire-and-forget, but the result is deliberately ignored:
+     a failed email never fails a persisted submission. The passthrough-parsed
+     payload still carries source/intake, hence the narrow cast. */
+  await sendIntakeNotification(ownerEmail, payload as unknown as IntakePayload);
 
   return NextResponse.json({ ok: true });
 }
