@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, integer, jsonb, boolean, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, integer, jsonb, boolean, primaryKey, index } from "drizzle-orm/pg-core";
 import type { AdapterAccountType } from "next-auth/adapters";
 
 /* Auth.js (NextAuth v5) standard tables for the Drizzle adapter */
@@ -50,6 +50,32 @@ export const useCases = pgTable("use_case", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+/* Build Kickoff (BK-0). One row per generated implementation plan; the row is
+   also the async job (status drives queued→running→terminal). Versioned per
+   case. `status` is plain text enforced by the KickoffStatus Zod enum in
+   src/lib/kickoff/contracts.ts, matching the denormalized-text convention used
+   for use_case.verdict above. jsonb columns mirror the PRD data contracts:
+   plan=IntegratedPlan, audit=CriticAudit, laneStatus/provenance/cost as named.
+   Job-runner columns (attempts, lease) are deferred to BK-1 with the runner
+   decision (BK-S2) — they'd bake in a mechanism not yet chosen. */
+export const buildKickoffPlans = pgTable("build_kickoff_plan", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  caseId: uuid("case_id").notNull().references(() => useCases.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  status: text("status").notNull(), // KickoffStatus enum, app-enforced
+  plan: jsonb("plan"),              // IntegratedPlan | null
+  audit: jsonb("audit"),            // CriticAudit | null
+  laneStatus: jsonb("lane_status").notNull(),
+  provenance: jsonb("provenance").notNull(),
+  cost: jsonb("cost"),              // { inputTokens, outputTokens, usd } | null
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("bkp_case_version_idx").on(t.caseId, t.version),
+  index("bkp_user_idx").on(t.userId),
+]);
 
 export const shareLinks = pgTable("share_link", {
   token: text("token").primaryKey(),
