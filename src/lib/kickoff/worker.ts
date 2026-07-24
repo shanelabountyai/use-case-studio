@@ -1,0 +1,167 @@
+/* Build Kickoff worker (BK-1): the job state machine + DB queue operations.
+
+   executeJob is the pure-ish orchestrator (LLM stages injected, so it unit-tests
+   without a provider or a DB). The DB ops implement the BK-S2 mechanism: a
+   compare-and-swap claim over the neon-http driver (no transaction needed) with
+   a lease so a dead worker's row is reclaimable.
+
+   Partial-lane contract (P0.10): any stage failure marks its lane and yields
+   status=partial — never a silent "complete" over a missing lane. A plan with
+   no completed critic audit is partial, hence non-approvable downstream (BK-5). */
+
+import { and, asc, eq, lt, or } from "drizzle-orm";
+import { db } from "@/db";
+import { buildKickoffPlans, useCases } from "@/db/schema";
+import type { UseCase } from "../engine";
+import { serializeGrounding } from "./grounding";
+import type { IntegratedPlan, CriticAudit, LaneStatus, Provenance } from "./contracts";
+import { stubPlanner, stubCritic, type Planner, type Critic } from "./provider";
+
+const LEASE_MS = 5 * 60 * 1000; // 5 min — comfortably over a single-shot run on Vercel Pro (300s)
+const MAX_ATTEMPTS = 3;
+
+export interface JobOutcome {
+  status: "complete" | "partial" | "failed";
+  plan: IntegratedPlan | null;
+  audit: CriticAudit | null;
+  laneStatus: LaneStatus;
+  cost: { inputTokens: number; outputTokens: number; usd: number } | null;
+  note: string | null;
+}
+
+/** Run the two-stage pipeline for one job. Deterministic control flow; the two
+ *  LLM stages are injected (stubs in P0, Claude in BK-3/BK-4). */
+export async function executeJob(
+  caseId: string,
+  uc: UseCase,
+  serverVerdict: string,
+  deps: { planner: Planner; critic: Critic } = { planner: stubPlanner, critic: stubCritic },
+): Promise<JobOutcome> {
+  const laneStatus: LaneStatus = { planner: "skipped", critic: "skipped" };
+  const g = serializeGrounding(caseId, uc);
+  let inputTokens = 0;
+  let outputTokens = 0;
+
+  // ── Call 1: planner ──
+  let plan: IntegratedPlan;
+  try {
+    const r = await deps.planner(g);
+    plan = r.plan;
+    inputTokens += r.inputTokens;
+    outputTokens += r.outputTokens;
+    laneStatus.planner = "ok";
+  } catch {
+    laneStatus.planner = "failed";
+    return { status: "partial", plan: null, audit: null, laneStatus, cost: null, note: "planner stage failed" };
+  }
+
+  // Integrity: the planner echoes a verdict; the server's re-derived verdict wins.
+  if (plan.verdict !== serverVerdict) {
+    laneStatus.planner = "failed";
+    return { status: "partial", plan, audit: null, laneStatus, cost: null, note: `verdict mismatch: plan=${plan.verdict} server=${serverVerdict}` };
+  }
+
+  // ── Call 2: critic (independent — sees only plan + grounding) ──
+  try {
+    const r = await deps.critic(plan, g);
+    inputTokens += r.inputTokens;
+    outputTokens += r.outputTokens;
+    laneStatus.critic = "ok";
+    return {
+      status: "complete",
+      plan,
+      audit: r.audit,
+      laneStatus,
+      cost: { inputTokens, outputTokens, usd: 0 }, // real USD lands in BK-6
+      note: null,
+    };
+  } catch {
+    laneStatus.critic = "failed";
+    // A plan without an audit is non-approvable → partial, never complete.
+    return { status: "partial", plan, audit: null, laneStatus, cost: null, note: "critic stage failed" };
+  }
+}
+
+/* ─────────────────────── DB queue operations ─────────────────────── */
+
+export async function createJob(input: {
+  caseId: string;
+  userId: string;
+  provenance: Provenance;
+}): Promise<{ id: string }> {
+  const [row] = await db
+    .insert(buildKickoffPlans)
+    .values({
+      caseId: input.caseId,
+      userId: input.userId,
+      version: 1, // ponytail: per-case version is always 1 in P0 (one plan/case); BK-5 bumps it when re-runs land
+      status: "queued",
+      laneStatus: {},
+      provenance: input.provenance,
+    })
+    .returning({ id: buildKickoffPlans.id });
+  return row;
+}
+
+/** Compare-and-swap claim: pick the oldest queued (or dead-lease) job, then
+ *  conditionally flip it to running. If another worker won the race the guarded
+ *  update matches 0 rows and we return null — the next cron tick retries. */
+export async function claimNextJob(): Promise<typeof buildKickoffPlans.$inferSelect | null> {
+  const now = new Date();
+  const claimable = or(
+    eq(buildKickoffPlans.status, "queued"),
+    and(eq(buildKickoffPlans.status, "running"), lt(buildKickoffPlans.leaseUntil, now)),
+  );
+  const [cand] = await db
+    .select({ id: buildKickoffPlans.id, attempts: buildKickoffPlans.attempts })
+    .from(buildKickoffPlans)
+    .where(claimable)
+    .orderBy(asc(buildKickoffPlans.createdAt))
+    .limit(1);
+  if (!cand) return null;
+
+  if (cand.attempts >= MAX_ATTEMPTS) {
+    await db
+      .update(buildKickoffPlans)
+      .set({ status: "failed", note: `exceeded ${MAX_ATTEMPTS} attempts` })
+      .where(eq(buildKickoffPlans.id, cand.id));
+    return null;
+  }
+
+  const [claimed] = await db
+    .update(buildKickoffPlans)
+    .set({ status: "running", attempts: cand.attempts + 1, leaseUntil: new Date(Date.now() + LEASE_MS) })
+    .where(and(eq(buildKickoffPlans.id, cand.id), claimable)) // guard: still claimable
+    .returning();
+  return claimed ?? null;
+}
+
+export async function finishJob(id: string, outcome: JobOutcome): Promise<void> {
+  await db
+    .update(buildKickoffPlans)
+    .set({
+      status: outcome.status,
+      plan: outcome.plan,
+      audit: outcome.audit,
+      laneStatus: outcome.laneStatus,
+      cost: outcome.cost,
+      note: outcome.note,
+      leaseUntil: null,
+    })
+    .where(eq(buildKickoffPlans.id, id));
+}
+
+/** Kill switch: fail any in-flight (queued/running) job cleanly (BK-6 surfaces
+ *  the paused state). Called by the worker when the switch is flipped. */
+export async function failInflightJobs(): Promise<void> {
+  await db
+    .update(buildKickoffPlans)
+    .set({ status: "failed", note: "Build Kickoff paused (kill switch)", leaseUntil: null })
+    .where(or(eq(buildKickoffPlans.status, "queued"), eq(buildKickoffPlans.status, "running")));
+}
+
+/** Load a job's case payload (used by the worker route). */
+export async function loadCasePayload(caseId: string): Promise<UseCase | null> {
+  const [row] = await db.select().from(useCases).where(eq(useCases.id, caseId));
+  return row ? (row.payload as UseCase) : null;
+}

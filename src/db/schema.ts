@@ -70,6 +70,11 @@ export const buildKickoffPlans = pgTable("build_kickoff_plan", {
   laneStatus: jsonb("lane_status").notNull(),
   provenance: jsonb("provenance").notNull(),
   cost: jsonb("cost"),              // { inputTokens, outputTokens, usd } | null
+  note: text("note"),               // human-readable detail: partial/failed reason (BK-1)
+  // Runner columns (BK-1, DB-queue mechanism from BK-S2). A worker CAS-claims a
+  // queued row and holds a lease; a dead worker's expired lease is reclaimable.
+  attempts: integer("attempts").notNull().default(0),
+  leaseUntil: timestamp("lease_until"),
   approvedAt: timestamp("approved_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [

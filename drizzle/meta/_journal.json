@@ -15,6 +15,13 @@
       "when": 1784923203752,
       "tag": "0001_lively_ronan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784924072346,
+      "tag": "0002_curious_susan_delgado",
+      "breakpoints": true
     }
   ]
 }
