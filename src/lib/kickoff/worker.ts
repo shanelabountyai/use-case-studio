@@ -9,7 +9,7 @@
    status=partial — never a silent "complete" over a missing lane. A plan with
    no completed critic audit is partial, hence non-approvable downstream (BK-5). */
 
-import { and, asc, eq, lt, or } from "drizzle-orm";
+import { and, asc, eq, lt, max, or } from "drizzle-orm";
 import { db } from "@/db";
 import { buildKickoffPlans, useCases } from "@/db/schema";
 import type { UseCase } from "../engine";
@@ -89,18 +89,47 @@ export async function createJob(input: {
   userId: string;
   provenance: Provenance;
 }): Promise<{ id: string }> {
+  // Per-case monotonic version (BK-5). One plan/case in P0; re-runs (P1) increment.
+  const [{ v } = { v: null }] = await db
+    .select({ v: max(buildKickoffPlans.version) })
+    .from(buildKickoffPlans)
+    .where(eq(buildKickoffPlans.caseId, input.caseId));
   const [row] = await db
     .insert(buildKickoffPlans)
     .values({
       caseId: input.caseId,
       userId: input.userId,
-      version: 1, // ponytail: per-case version is always 1 in P0 (one plan/case); BK-5 bumps it when re-runs land
+      version: (v ?? 0) + 1,
       status: "queued",
       laneStatus: {},
       provenance: input.provenance,
     })
     .returning({ id: buildKickoffPlans.id });
   return row;
+}
+
+/** Owner-scoped fetch of a full job row (approve/export/poll). */
+export async function getOwnedJob(jobId: string, userId: string) {
+  const [row] = await db
+    .select()
+    .from(buildKickoffPlans)
+    .where(and(eq(buildKickoffPlans.id, jobId), eq(buildKickoffPlans.userId, userId)));
+  return row ?? null;
+}
+
+export type ApproveResult = "approved" | "not-found" | "not-approvable";
+
+/** Draft→approve transition. Only a `complete` plan (plan + attached audit) is
+ *  approvable; partial/failed/queued/running are refused (P0.7, P0.10). */
+export async function approveJob(jobId: string, userId: string): Promise<ApproveResult> {
+  const row = await getOwnedJob(jobId, userId);
+  if (!row) return "not-found";
+  if (row.status !== "complete") return "not-approvable";
+  await db
+    .update(buildKickoffPlans)
+    .set({ status: "approved", approvedAt: new Date() })
+    .where(and(eq(buildKickoffPlans.id, jobId), eq(buildKickoffPlans.userId, userId)));
+  return "approved";
 }
 
 /** Compare-and-swap claim: pick the oldest queued (or dead-lease) job, then

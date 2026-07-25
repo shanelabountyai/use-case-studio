@@ -18,7 +18,7 @@ vi.mock("@/db", () => ({
   },
 }));
 
-import { executeJob, claimNextJob, createJob } from "./worker";
+import { executeJob, claimNextJob, createJob, approveJob } from "./worker";
 import { stubPlanner, stubCritic } from "./provider";
 import { CASE_POLICY_LOOKUP } from "./fixtures";
 
@@ -118,5 +118,27 @@ describe("createJob", () => {
       },
     });
     expect(job.id).toBe("job-1");
+  });
+});
+
+describe("approveJob — draft→approve gate", () => {
+  it("approves a completed plan", async () => {
+    selectRows = [{ id: "j", status: "complete", userId: "user-a" }];
+    expect(await approveJob("j", "user-a")).toBe("approved");
+  });
+
+  it("refuses a partial plan (non-approvable)", async () => {
+    selectRows = [{ id: "j", status: "partial", userId: "user-a" }];
+    expect(await approveJob("j", "user-a")).toBe("not-approvable");
+  });
+
+  it("refuses a queued plan (non-approvable)", async () => {
+    selectRows = [{ id: "j", status: "queued", userId: "user-a" }];
+    expect(await approveJob("j", "user-a")).toBe("not-approvable");
+  });
+
+  it("returns not-found for a non-owner (scoped query finds nothing)", async () => {
+    selectRows = [];
+    expect(await approveJob("j", "not-owner")).toBe("not-found");
   });
 });
