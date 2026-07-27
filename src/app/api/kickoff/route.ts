@@ -8,6 +8,7 @@ import { kickoffEnabled } from "@/lib/kickoff/flags";
 import { inputsPrecheck, needsPiiConfirm, sensitivityLabel } from "@/lib/kickoff/precheck";
 import { caseVersionHash, parkNote } from "@/lib/kickoff/grounding";
 import { createJob } from "@/lib/kickoff/worker";
+import { withinLimits } from "@/lib/kickoff/limits";
 import { PROMPT_ROSTER_VERSION } from "@/lib/kickoff/provider";
 import type { Provenance } from "@/lib/kickoff/contracts";
 
@@ -67,6 +68,10 @@ export async function POST(req: Request) {
       },
       { status: 409 },
     );
+
+  // Gate 3: per-user concurrency + daily ceiling (BK-6) — reject before enqueue.
+  const limit = await withinLimits(session.user.id);
+  if (!limit.ok) return NextResponse.json({ error: "rate limited", reason: limit.reason }, { status: 429 });
 
   const hash = caseVersionHash(uc);
   const provenance: Provenance = {

@@ -70,6 +70,7 @@ export const buildKickoffPlans = pgTable("build_kickoff_plan", {
   laneStatus: jsonb("lane_status").notNull(),
   provenance: jsonb("provenance").notNull(),
   cost: jsonb("cost"),              // { inputTokens, outputTokens, usd } | null
+  latencyMs: integer("latency_ms"), // run wall-clock, telemetry (BK-6)
   note: text("note"),               // human-readable detail: partial/failed reason (BK-1)
   // Runner columns (BK-1, DB-queue mechanism from BK-S2). A worker CAS-claims a
   // queued row and holds a lease; a dead worker's expired lease is reclaimable.
@@ -81,6 +82,18 @@ export const buildKickoffPlans = pgTable("build_kickoff_plan", {
   index("bkp_case_version_idx").on(t.caseId, t.version),
   index("bkp_user_idx").on(t.userId),
 ]);
+
+/* Inline feedback capture (BK-6): the seed of the eval corpus. One row per
+   signal on a plan — "was this gap real?", "flag a fabrication", usable/not. */
+export const kickoffFeedback = pgTable("kickoff_feedback", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  jobId: uuid("job_id").notNull().references(() => buildKickoffPlans.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),   // gap-real | fabrication | usable
+  ref: text("ref"),               // which finding (e.g. gap title), nullable
+  value: text("value").notNull(), // yes/no/rating payload
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [index("kfb_job_idx").on(t.jobId)]);
 
 export const shareLinks = pgTable("share_link", {
   token: text("token").primaryKey(),

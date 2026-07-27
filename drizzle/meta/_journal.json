@@ -22,6 +22,13 @@
       "when": 1784924072346,
       "tag": "0002_curious_susan_delgado",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1785187863457,
+      "tag": "0003_outstanding_malice",
+      "breakpoints": true
     }
   ]
 }

@@ -17,13 +17,16 @@ vi.mock("@/lib/kickoff/flags", () => ({
   kickoffEnabled: vi.fn(() => true),
   kickoffKilled: vi.fn(() => false),
 }));
+vi.mock("@/lib/kickoff/limits", () => ({ withinLimits: vi.fn(async () => ({ ok: true })) }));
 
 import { auth } from "@/auth";
 import { kickoffEnabled } from "@/lib/kickoff/flags";
+import { withinLimits } from "@/lib/kickoff/limits";
 import { POST } from "./route";
 
 const mockAuth = vi.mocked(auth as unknown as () => Promise<unknown>);
 const mockEnabled = vi.mocked(kickoffEnabled);
+const mockLimits = vi.mocked(withinLimits);
 
 const setCase = (uc: UseCase) => (caseRows = [{ payload: uc }]);
 const req = (body: unknown) =>
@@ -37,6 +40,7 @@ beforeEach(() => {
   mockAuth.mockReset();
   mockAuth.mockResolvedValue({ user: { id: "user-a" } });
   mockEnabled.mockReturnValue(true);
+  mockLimits.mockResolvedValue({ ok: true });
   caseRows = [];
 });
 
@@ -90,6 +94,12 @@ describe("POST /api/kickoff — pre-check & verdict routing", () => {
     const res = await POST(req({ caseId: "c" }));
     expect(res.status).toBe(202);
     expect((await res.json()).jobId).toBe("job-1");
+  });
+
+  it("429 when the per-user concurrency/daily ceiling is hit", async () => {
+    setCase(CASE_POLICY_LOOKUP);
+    mockLimits.mockResolvedValue({ ok: false, reason: "A run is already in progress (limit 1)." });
+    expect((await POST(req({ caseId: "c" }))).status).toBe(429);
   });
 });
 

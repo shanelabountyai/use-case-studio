@@ -11,14 +11,26 @@
 
 import { and, asc, eq, lt, max, or } from "drizzle-orm";
 import { db } from "@/db";
-import { buildKickoffPlans, useCases } from "@/db/schema";
+import { buildKickoffPlans, kickoffFeedback, useCases } from "@/db/schema";
 import type { UseCase } from "../engine";
 import { serializeGrounding } from "./grounding";
 import type { IntegratedPlan, CriticAudit, LaneStatus, Provenance } from "./contracts";
 import { stubPlanner, stubCritic, type Planner, type Critic } from "./provider";
+import { getLimits, type KickoffLimits } from "./limits";
 
 const LEASE_MS = 5 * 60 * 1000; // 5 min — comfortably over a single-shot run on Vercel Pro (300s)
 const MAX_ATTEMPTS = 3;
+
+/** Resolve to a sentinel if `p` doesn't settle within ms. ponytail: the race
+ *  stops us waiting, it does not hard-abort the in-flight call — BK-3/BK-4 pass
+ *  an AbortSignal to actually cancel the fetch. Good enough to bound the worker. */
+function raceTimeout<T>(p: Promise<T>, ms: number, onTimeout: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const t = new Promise<T>((res) => {
+    timer = setTimeout(() => res(onTimeout), ms);
+  });
+  return Promise.race([p.finally(() => clearTimeout(timer)), t]);
+}
 
 export interface JobOutcome {
   status: "complete" | "partial" | "failed";
@@ -30,17 +42,36 @@ export interface JobOutcome {
 }
 
 /** Run the two-stage pipeline for one job. Deterministic control flow; the two
- *  LLM stages are injected (stubs in P0, Claude in BK-3/BK-4). */
+ *  LLM stages are injected (stubs in P0, Claude in BK-3/BK-4). Bounded by a
+ *  per-run token cap and wall-clock timeout (BK-6): breaching either aborts to a
+ *  labeled partial rather than running away. */
 export async function executeJob(
   caseId: string,
   uc: UseCase,
   serverVerdict: string,
   deps: { planner: Planner; critic: Critic } = { planner: stubPlanner, critic: stubCritic },
+  limits: KickoffLimits = getLimits(),
+): Promise<JobOutcome> {
+  const timedOut: JobOutcome = {
+    status: "partial", plan: null, audit: null,
+    laneStatus: { planner: "failed", critic: "skipped" }, cost: null,
+    note: `run exceeded ${limits.timeoutMs}ms timeout`,
+  };
+  return raceTimeout(runPipeline(caseId, uc, serverVerdict, deps, limits), limits.timeoutMs, timedOut);
+}
+
+async function runPipeline(
+  caseId: string,
+  uc: UseCase,
+  serverVerdict: string,
+  deps: { planner: Planner; critic: Critic },
+  limits: KickoffLimits,
 ): Promise<JobOutcome> {
   const laneStatus: LaneStatus = { planner: "skipped", critic: "skipped" };
   const g = serializeGrounding(caseId, uc);
   let inputTokens = 0;
   let outputTokens = 0;
+  const overCap = () => inputTokens + outputTokens > limits.tokenCap;
 
   // ── Call 1: planner ──
   let plan: IntegratedPlan;
@@ -61,24 +92,32 @@ export async function executeJob(
     return { status: "partial", plan, audit: null, laneStatus, cost: null, note: `verdict mismatch: plan=${plan.verdict} server=${serverVerdict}` };
   }
 
+  // Token cap: stop before the critic call if the planner already blew the budget.
+  if (overCap()) {
+    laneStatus.critic = "skipped";
+    return { status: "partial", plan, audit: null, laneStatus, cost: { inputTokens, outputTokens, usd: 0 }, note: `token cap exceeded (${inputTokens + outputTokens}/${limits.tokenCap})` };
+  }
+
   // ── Call 2: critic (independent — sees only plan + grounding) ──
   try {
     const r = await deps.critic(plan, g);
     inputTokens += r.inputTokens;
     outputTokens += r.outputTokens;
     laneStatus.critic = "ok";
+    if (overCap())
+      return { status: "partial", plan, audit: r.audit, laneStatus, cost: { inputTokens, outputTokens, usd: 0 }, note: `token cap exceeded (${inputTokens + outputTokens}/${limits.tokenCap})` };
     return {
       status: "complete",
       plan,
       audit: r.audit,
       laneStatus,
-      cost: { inputTokens, outputTokens, usd: 0 }, // real USD lands in BK-6
+      cost: { inputTokens, outputTokens, usd: 0 }, // real USD attributed when BK-3 wires the model price
       note: null,
     };
   } catch {
     laneStatus.critic = "failed";
     // A plan without an audit is non-approvable → partial, never complete.
-    return { status: "partial", plan, audit: null, laneStatus, cost: null, note: "critic stage failed" };
+    return { status: "partial", plan, audit: null, laneStatus, cost: { inputTokens, outputTokens, usd: 0 }, note: "critic stage failed" };
   }
 }
 
@@ -165,7 +204,7 @@ export async function claimNextJob(): Promise<typeof buildKickoffPlans.$inferSel
   return claimed ?? null;
 }
 
-export async function finishJob(id: string, outcome: JobOutcome): Promise<void> {
+export async function finishJob(id: string, outcome: JobOutcome, latencyMs?: number): Promise<void> {
   await db
     .update(buildKickoffPlans)
     .set({
@@ -174,10 +213,34 @@ export async function finishJob(id: string, outcome: JobOutcome): Promise<void> 
       audit: outcome.audit,
       laneStatus: outcome.laneStatus,
       cost: outcome.cost,
+      latencyMs: latencyMs ?? null,
       note: outcome.note,
       leaseUntil: null,
     })
     .where(eq(buildKickoffPlans.id, id));
+}
+
+export type FeedbackKind = "gap-real" | "fabrication" | "usable";
+
+/** Persist one inline feedback signal, owner-scoped (the caller must own the
+ *  job). Returns false if the job isn't the user's. Seeds the eval corpus. */
+export async function recordFeedback(input: {
+  jobId: string;
+  userId: string;
+  kind: FeedbackKind;
+  ref?: string;
+  value: string;
+}): Promise<boolean> {
+  const owns = await getOwnedJob(input.jobId, input.userId);
+  if (!owns) return false;
+  await db.insert(kickoffFeedback).values({
+    jobId: input.jobId,
+    userId: input.userId,
+    kind: input.kind,
+    ref: input.ref ?? null,
+    value: input.value,
+  });
+  return true;
 }
 
 /** Kill switch: fail any in-flight (queued/running) job cleanly (BK-6 surfaces

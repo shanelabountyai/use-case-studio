@@ -41,7 +41,8 @@ export async function GET(req: Request) {
   // Re-derive the verdict again at run time (the case could have changed between
   // enqueue and execution); the planner must echo this.
   const { verdict } = evaluate(uc as UseCase);
+  const startedAt = Date.now();
   const outcome = await executeJob(job.caseId, uc as UseCase, verdict);
-  await finishJob(job.id, outcome);
+  await finishJob(job.id, outcome, Date.now() - startedAt); // latency telemetry (BK-6)
   return NextResponse.json({ jobId: job.id, status: outcome.status }, { status: 200 });
 }

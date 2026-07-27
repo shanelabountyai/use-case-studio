@@ -18,11 +18,12 @@ vi.mock("@/db", () => ({
   },
 }));
 
-import { executeJob, claimNextJob, createJob, approveJob } from "./worker";
+import { executeJob, claimNextJob, createJob, approveJob, recordFeedback } from "./worker";
 import { stubPlanner, stubCritic } from "./provider";
 import { CASE_POLICY_LOOKUP } from "./fixtures";
 
 const CASE_ID = "22222222-2222-4222-8222-222222222222";
+const LIMITS = { tokenCap: 60000, timeoutMs: 120000, maxConcurrent: 1, dailyCeiling: 20 };
 
 beforeEach(() => {
   selectRows = [];
@@ -79,6 +80,41 @@ describe("executeJob — state machine (LLM stages injected)", () => {
     expect(out.status).toBe("partial");
     expect(out.laneStatus.planner).toBe("failed");
     expect(out.note).toMatch(/verdict mismatch/);
+  });
+
+  it("token cap breach after the planner → partial, critic skipped, no runaway", async () => {
+    const critic = vi.fn();
+    const out = await executeJob(
+      CASE_ID, CASE_POLICY_LOOKUP, "BUILD",
+      { planner: async (g) => ({ ...(await stubPlanner(g)), inputTokens: 999_999, outputTokens: 0 }), critic },
+      { ...LIMITS, tokenCap: 100 },
+    );
+    expect(out.status).toBe("partial");
+    expect(out.note).toMatch(/token cap exceeded/);
+    expect(out.laneStatus.critic).toBe("skipped");
+    expect(critic).not.toHaveBeenCalled();
+  });
+
+  it("wall-clock timeout → partial with a labeled timeout note", async () => {
+    const out = await executeJob(
+      CASE_ID, CASE_POLICY_LOOKUP, "BUILD",
+      { planner: async (g) => { await new Promise((r) => setTimeout(r, 40)); return stubPlanner(g); }, critic: stubCritic },
+      { ...LIMITS, timeoutMs: 5 },
+    );
+    expect(out.status).toBe("partial");
+    expect(out.note).toMatch(/timeout/);
+  });
+});
+
+describe("recordFeedback", () => {
+  it("persists a signal on a job the caller owns", async () => {
+    selectRows = [{ id: "j", userId: "user-a" }];
+    expect(await recordFeedback({ jobId: "j", userId: "user-a", kind: "usable", value: "yes" })).toBe(true);
+  });
+
+  it("refuses to write on a job the caller doesn't own", async () => {
+    selectRows = [];
+    expect(await recordFeedback({ jobId: "j", userId: "not-owner", kind: "gap-real", value: "no" })).toBe(false);
   });
 });
 
