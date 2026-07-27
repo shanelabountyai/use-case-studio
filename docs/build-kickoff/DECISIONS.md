@@ -1,5 +1,31 @@
 # Build Kickoff — Spike Decisions
 
+## Status (2026-07-27): provider-independent foundation COMPLETE
+Built + tested behind `KICKOFF_ENABLED` (off): BK-0 contracts/table · BK-2
+serializer · BK-1 async plumbing+guards · BK-7 eval scaffold (deterministic
+half) · BK-5 approve gate + Markdown export · BK-6 cost caps/ceilings/telemetry/
+feedback. LLM stages are stubbed behind `provider.ts`. 224 tests green.
+
+**Remaining P0 (needs the Anthropic key + spend):** BK-3 planner, BK-4 critic,
+and the live half of BK-7 (LLM-judge validation + `criticFabricationGate`).
+
+### Go-live checklist (do before flipping the feature on)
+1. Apply migrations `0001`–`0003` to the target Neon DB (dev first): `npm run db:migrate`.
+2. Set env vars (Vercel prod + local `.env`):
+   - `ANTHROPIC_API_KEY` — the provider key (BK-3/BK-4).
+   - `CRON_SECRET` — any random string; the worker rejects the cron without it.
+   - `KICKOFF_ENABLED=true` — flips the trigger on (leave unset to keep dark).
+   - Optional cap overrides: `KICKOFF_TOKEN_CAP` (60000), `KICKOFF_TIMEOUT_MS`
+     (120000), `KICKOFF_MAX_CONCURRENT` (1), `KICKOFF_DAILY_CEILING` (20).
+   - Optional `KICKOFF_KILL_SWITCH=true` to pause everything.
+3. The `vercel.json` cron hits `/api/kickoff/worker` every minute (Vercel Pro).
+4. Launch gate (BK-7): all deterministic tests green · golden invariants pass ·
+   critic catches 100% of planted fabrications · LLM-judge validated vs human ·
+   run-success ≥95% on the corpus.
+
+---
+
+
 Running record for BK-S1 (provider/cost) and BK-S2 (job runner). Each entry is a
 recommendation + the decision once Shane confirms. Nothing downstream (BK-0…BK-7)
 starts until the decision line is filled in.
