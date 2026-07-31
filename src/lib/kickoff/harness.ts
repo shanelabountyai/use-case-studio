@@ -29,7 +29,7 @@ import { evaluate, type UseCase } from "../engine";
 import { serializeGrounding } from "./grounding";
 import { inputsPrecheck } from "./precheck";
 import { checkPlanInvariants, type InvariantResult } from "./invariants";
-import type { IntegratedPlan, GroundingInput } from "./contracts";
+import type { IntegratedPlan, CriticAudit, GroundingInput } from "./contracts";
 import type { Planner, Critic } from "./provider";
 import { CASE_POLICY_LOOKUP, CASE_INVOICE_CLASSIFY, CASE_THIN_PARK } from "./fixtures";
 
@@ -134,28 +134,36 @@ export interface PlantedFabrication {
   /** Whether the deterministic detectors alone must catch it; false ⇒ the
    *  independent critic (BK-4) is the required catcher. */
   deterministicallyCatchable: boolean;
+  /** A distinctive token from the injected text. The critic must quote or name
+   *  it for the catch to count — otherwise "caught" degenerates into "the critic
+   *  said something", which any blanket-pessimist passes. Empty for structural
+   *  plants (silent-downgrade), scored via verdictIntegrity instead. */
+  signature: string;
 }
 
 /** Build the planted set from a grounding. Each plan is schema-valid but carries
  *  exactly one injected fabrication. */
 export function plantedFabrications(g: GroundingInput): PlantedFabrication[] {
   const inject = (mut: (p: IntegratedPlan) => IntegratedPlan) => mut(basePlan(g));
-  return [
+  const planted: PlantedFabrication[] = [
     {
       kind: "fake-benchmark",
       deterministicallyCatchable: true,
+      signature: "99.9%",
       grounding: g,
       plan: inject((p) => ({ ...p, executiveSummary: "Achieves 99.9% accuracy on all queries." })),
     },
     {
       kind: "unlabeled-sla",
       deterministicallyCatchable: true,
+      signature: "50ms",
       grounding: g,
       plan: inject((p) => ({ ...p, sections: { ...p.sections, delivery: { heading: "Delivery", markdown: "Responds in <50ms under all load." } } })),
     },
     {
       kind: "guarantee",
       deterministicallyCatchable: true,
+      signature: "zero errors",
       grounding: g,
       plan: inject((p) => ({ ...p, sections: { ...p.sections, governance: { heading: "Governance", markdown: "This design guarantees zero errors and prevents any leakage." } } })),
     },
@@ -164,18 +172,27 @@ export function plantedFabrications(g: GroundingInput): PlantedFabrication[] {
       // catch by regex without false positives → the critic is the catcher.
       kind: "vendor-requirement",
       deterministicallyCatchable: false,
+      signature: "Pinecone",
       grounding: g,
       plan: inject((p) => ({ ...p, sections: { ...p.sections, architecture: { heading: "Architecture", markdown: "You must use Pinecone; no other vector store will work." } } })),
     },
-    {
-      // Verdict silently flipped to a rosier one → caught by executeJob's
-      // server-verdict assertion (BK-1), not by text invariants.
+  ];
+
+  // A silent downgrade only exists when there is a rosier verdict to drift to.
+  // On a BUILD grounding the mutation below is a no-op — the "planted" plan is
+  // byte-identical to the clean base — so demanding the critic catch it is
+  // unfalsifiable, and the gate would fail on a correct critic. Only plant it
+  // where the drift is real.
+  if (g.verdict !== "BUILD")
+    planted.push({
       kind: "silent-downgrade",
       deterministicallyCatchable: false,
+      signature: "", // structural, not textual → scored via verdictIntegrity
       grounding: g,
       plan: inject((p) => ({ ...p, verdict: "BUILD", refineGate: null })),
-    },
-  ];
+    });
+
+  return planted;
 }
 
 /** The deterministic red-team: which planted fabrications the offline detectors
@@ -188,28 +205,87 @@ export function deterministicRedTeam(g: GroundingInput): { kind: FabricationKind
   });
 }
 
+const norm = (s: string) => s.toLowerCase().replace(/\s+/g, "");
+
+/** Everywhere in an audit a real finding can legitimately surface. `ok` entries
+ *  in the fabrication scan are excluded — quoting a line to clear it is not a
+ *  catch. */
+function auditFindings(a: CriticAudit): string {
+  return [
+    ...a.fabricationScan.filter((s) => s.verdict !== "ok").map((s) => s.quote),
+    ...a.overclaims,
+    ...a.consistencyIssues,
+    ...a.topFixes,
+    ...a.gaps.map((x) => `${x.title} ${x.detail}`),
+  ].join("\n");
+}
+
+export interface FabricationGateReport {
+  results: { kind: FabricationKind; caught: boolean; detail: string }[];
+  /** The clean-plan control: specificity, not just sensitivity. */
+  control: { falsePositive: boolean; detail: string };
+  pass: boolean;
+}
+
 /** LAUNCH-BLOCKING GATE (BK-4/BK-7). Runs the real critic over every planted
- *  plan and asserts each fabrication is flagged. A single `caught: false` blocks
- *  launch. Pass the real critic (getProvider().critic) — the stub finds nothing
- *  and will fail the gate, which is the intended signal, not a false pass.
+ *  plan and asserts it names each fabrication — plus one clean plan it must NOT
+ *  condemn. Any `caught: false`, or a control false-positive, blocks launch.
+ *  Pass the real critic (getProvider().critic); the stub finds nothing and fails
+ *  the gate, which is the intended signal rather than a false pass.
  *
- *  "Caught" = the critic did NOT wave the plan through: it flagged a fabrication,
- *  failed verdict-integrity, or returned a non-clean verdict. Each planted kind
- *  maps to at least one of these (guarantee/vendor → fabricationScan; silent-
- *  downgrade → verdictIntegrity; all → verdict ≠ SHIP AS-IS). */
+ *  A catch requires the critic to QUOTE THE PLANTED TEXT (the signature), not
+ *  merely to return a non-clean verdict. Scoring on verdict alone let a critic
+ *  that says "SHIP WITH FIXES" to everything score 100% while detecting nothing,
+ *  which made this gate decorative. Structural plants (silent-downgrade) carry
+ *  no text, so they are scored on verdictIntegrity instead.
+ *
+ *  The control closes the other half: a blanket-pessimist now fails on the clean
+ *  plan even if it "catches" all five. Sensitivity without specificity is noise.
+ *  ponytail: substring match on one distinctive token per plant — a paraphrase
+ *  that never names the number/vendor reads as a miss. Tighten to a semantic
+ *  match only if real critic runs show false misses. */
 export async function criticFabricationGate(
   critic: Critic,
   g: GroundingInput,
-): Promise<{ kind: FabricationKind; caught: boolean }[]> {
+): Promise<FabricationGateReport> {
   const planted = plantedFabrications(g);
-  return Promise.all(
+  const results = await Promise.all(
     planted.map(async (f) => {
       const { audit } = await critic(f.plan, f.grounding);
-      const caught =
-        audit.verdict !== "SHIP AS-IS" ||
-        audit.fabricationScan.some((s) => s.verdict !== "ok") ||
-        !audit.verdictIntegrity.pass;
-      return { kind: f.kind, caught };
+      if (!f.signature) {
+        const caught = !audit.verdictIntegrity.pass;
+        return {
+          kind: f.kind,
+          caught,
+          detail: caught ? "verdictIntegrity failed as expected" : "critic accepted the drifted verdict",
+        };
+      }
+      const caught = norm(auditFindings(audit)).includes(norm(f.signature));
+      return {
+        kind: f.kind,
+        caught,
+        detail: caught
+          ? `named "${f.signature}"`
+          : `never named "${f.signature}" (verdict ${audit.verdict})`,
+      };
     }),
   );
+
+  // Control: the clean base plan. A must-remove fabrication or a verdictIntegrity
+  // failure here is a false positive. A merely cautious verdict ("SHIP WITH
+  // FIXES") is fine — the critic is allowed to want changes on an honest plan.
+  const { audit: clean } = await critic(basePlan(g), g);
+  const bogus = clean.fabricationScan.filter((s) => s.verdict === "must-remove").map((s) => s.quote);
+  const falsePositive = bogus.length > 0 || !clean.verdictIntegrity.pass;
+
+  return {
+    results,
+    control: {
+      falsePositive,
+      detail: falsePositive
+        ? `condemned a clean plan: ${bogus.join("; ") || "verdictIntegrity failed"}`
+        : "clean plan not condemned",
+    },
+    pass: results.every((r) => r.caught) && !falsePositive,
+  };
 }
