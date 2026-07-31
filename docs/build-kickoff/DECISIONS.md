@@ -20,8 +20,19 @@ out → **~$0.44/run**, ~33k tokens (well under the 60k cap). Fabrication gate
 to **280s** (fits the worker's 300s maxDuration). Cost/latency levers if needed:
 `KICKOFF_MODEL=claude-sonnet-5` or a lower effort in `claude.ts`.
 
-**Remaining P0:** LLM-judge validation vs human ratings before the judge is
-trusted (BK-7); everything else in the P0 pipeline is live-verified.
+**BK-7 LLM-judge (2026-07-31):** `judge.ts` — `judgePlan` scores a plan 1–5 on
+groundedness/actionability/barAlignment/honesty/overall; `judgeAgreement` +
+`validateJudge` measure judge-vs-human agreement and gate `trusted` on MAE ≤ 1.0,
+within-1 ≥ 0.8, Pearson ≥ 0.5, n ≥ 10 (`JUDGE_TRUST`). Judge stays untrusted
+until validated. Live smoke: on a fabrication-laden plan it scored honesty 1/5
+and its rationale caught the "guarantees zero errors" overclaim + a grounding
+mismatch. 242 tests green, build clean.
+
+**Remaining P0 (data/ops, not code):**
+- Collect a human-rated plan set (≥10) and run `validateJudge` to clear the judge
+  gate — only then lean on the judge.
+- Apply migrations `0001`–`0003` to dev Neon; mirror `ANTHROPIC_API_KEY` +
+  `CRON_SECRET` to Vercel (Pro); then set `KICKOFF_ENABLED=true`.
 
 ### Go-live checklist (do before flipping the feature on)
 1. Apply migrations `0001`–`0003` to the target Neon DB (dev first): `npm run db:migrate`.
