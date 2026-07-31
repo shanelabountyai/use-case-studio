@@ -15,9 +15,13 @@
       is launch-blocking) needs the real critic and is wired in BK-4; the hook
       is defined here and marked.
 
-   Still stubbed (need the live model, arrive with BK-3/BK-4):
-   - LLM-as-judge scored against human ratings before it's trusted.
-   - criticFabricationGate run against the real critic.
+   Live now (BK-3/BK-4/BK-7):
+   - criticFabricationGate runs against the real critic (below).
+   - LLM-as-judge + its human-agreement gate live in judge.ts; the judge stays
+     `trusted: false` until validated against a human-rated set (JUDGE_TRUST).
+
+   Still open (not code — data/ops):
+   - Collect the human-rated plan set and run validateJudge to clear the gate.
    - model-drift canary schedule.
    ============================================================= */
 

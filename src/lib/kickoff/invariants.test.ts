@@ -75,6 +75,23 @@ describe("checkPlanInvariants", () => {
     expect(spine?.pass).toBe(false);
   });
 
+  it("flags an architecture swap but tolerates a restatement of the same family", () => {
+    // g.recommendation.architecturePattern is RAG (lookup + documents).
+    const swapped = { ...okPlan, architecturePattern: "Fine-tuned classifier on the corpus" };
+    const arch = checkPlanInvariants(swapped, null, g).find((r) => r.name === "architecture-family-match");
+    expect(arch?.pass).toBe(false);
+
+    const restated = { ...okPlan, architecturePattern: "A RAG pipeline over the policy corpus" };
+    const ok = checkPlanInvariants(restated, null, g).find((r) => r.name === "architecture-family-match");
+    expect(ok?.pass).toBe(true);
+  });
+
+  it("does not flag an architecture pattern it cannot classify", () => {
+    const odd = { ...okPlan, architecturePattern: "Bespoke in-house approach" };
+    const arch = checkPlanInvariants(odd, null, g).find((r) => r.name === "architecture-family-match");
+    expect(arch?.pass).toBe(true);
+  });
+
   it("fails critic-verdict-wellformed when no audit is attached", () => {
     const critic = checkPlanInvariants(okPlan, null, g).find((r) => r.name === "critic-verdict-wellformed");
     expect(critic?.pass).toBe(false);

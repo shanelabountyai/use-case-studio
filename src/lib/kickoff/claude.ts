@@ -35,8 +35,9 @@ function client(): Anthropic {
 }
 
 /** One structured call: ask for `schema`, re-validate the reply with `schema`,
- *  retry once on a validation miss. Returns the parsed value + token usage. */
-async function callStructured<T>(
+ *  retry once on a validation miss. Returns the parsed value + token usage.
+ *  Exported for the BK-7 LLM-judge (judge.ts), which reuses the same contract. */
+export async function callStructured<T>(
   schema: Parameters<typeof zodOutputFormat>[0] & { parse: (raw: unknown) => T },
   system: string,
   user: string,

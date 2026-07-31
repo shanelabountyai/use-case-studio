@@ -83,6 +83,27 @@ const EVAL_VOCAB: Record<string, RegExp> = {
   generate: /rubric|llm-as-judge|judge/i,
 };
 
+/* Architecture families (BK-3). The planner is told to echo the engine's
+   recommended pattern verbatim; this catches the case where it substitutes a
+   different one instead of expanding it. Matching is by FAMILY, not string
+   equality, so a legitimate restatement ("a RAG pipeline over the policy
+   corpus") still passes while a genuine swap (RAG → fine-tuned classifier)
+   fails. Ordered: the first hit wins, so "grounded with RAG" reads as rag
+   before it reads as prompting. */
+const ARCH_FAMILIES: [family: string, test: RegExp][] = [
+  ["rag", /\brag\b|retrieval[- ]augmented|retrieval layer/i],
+  ["agent", /tool[- ]use|function[- ]calling|\bagent\b/i],
+  ["workflow", /orchestrat|workflow|pipeline of steps/i],
+  ["fine-tune", /fine[- ]tun/i],
+  ["prompting", /direct prompting|prompt(ing)? with/i],
+];
+
+/** The architecture family a pattern string belongs to, or null when it doesn't
+ *  match any known family (unclassifiable ⇒ we don't cry wolf). */
+export function architectureFamily(pattern: string): string | null {
+  return ARCH_FAMILIES.find(([, re]) => re.test(pattern))?.[0] ?? null;
+}
+
 /** Does the plan reference the acceptance bar (its number, else a distinctive
  *  long word)? A cheap structural proxy for "the bar is the spine." */
 function referencesBar(text: string, bar: string): boolean {
@@ -104,6 +125,8 @@ export function checkPlanInvariants(
   const guarantees = flagGuarantees(text);
   const unlabeled = flagUnlabeledMetrics(text, barMetrics(g.acceptanceBar));
   const vocab = EVAL_VOCAB[g.taskShape];
+  const planFamily = architectureFamily(plan.architecturePattern);
+  const groundFamily = architectureFamily(g.recommendation.architecturePattern);
   const results: InvariantResult[] = [
     {
       name: "acceptance-bar-spine",
@@ -124,6 +147,14 @@ export function checkPlanInvariants(
       name: "no-unlabeled-metrics",
       pass: unlabeled.length === 0,
       detail: unlabeled.length ? `unlabeled metrics: ${unlabeled.join(", ")}` : "none",
+    },
+    {
+      name: "architecture-family-match",
+      pass: planFamily === null || groundFamily === null || planFamily === groundFamily,
+      detail:
+        planFamily && groundFamily && planFamily !== groundFamily
+          ? `plan pattern "${plan.architecturePattern}" (${planFamily}) ≠ recommended "${g.recommendation.architecturePattern}" (${groundFamily})`
+          : "plan expands the recommended architecture",
     },
     {
       name: "critic-verdict-wellformed",
