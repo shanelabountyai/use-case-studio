@@ -7,13 +7,15 @@
    deterministic guard can be built and tested before a single real call. */
 
 import type { GroundingInput, IntegratedPlan, CriticAudit } from "./contracts";
+import { kickoffEnabled } from "./flags";
+import { realPlanner, realCritic } from "./claude";
 
 export type Planner = (g: GroundingInput) => Promise<{ plan: IntegratedPlan; inputTokens: number; outputTokens: number }>;
 export type Critic = (plan: IntegratedPlan, g: GroundingInput) => Promise<{ audit: CriticAudit; inputTokens: number; outputTokens: number }>;
 
-// Bumped on any planner/critic prompt edit (BK-3 owns the real roster). Pinned
-// into provenance so a plan is traceable to the prompts that produced it.
-export const PROMPT_ROSTER_VERSION = "bk-p0-stub";
+// Bumped on any planner/critic prompt edit. Pinned into provenance so a plan is
+// traceable to the prompts that produced it. bk-1: BK-3/BK-4 Claude stages live.
+export const PROMPT_ROSTER_VERSION = "bk-1-claude";
 
 const stubSection = (heading: string) => ({ heading, markdown: `_(stub)_ ${heading} section.` });
 
@@ -43,6 +45,15 @@ export const stubPlanner: Planner = async (g) => ({
         : null,
   },
 });
+
+/** Route to the real Claude stages only when the feature is enabled AND a key is
+ *  present; otherwise the offline stubs (dev/CI, or key not yet configured). The
+ *  worker calls this per run, so flipping KICKOFF_ENABLED needs no code change. */
+export function getProvider(): { planner: Planner; critic: Critic } {
+  if (kickoffEnabled() && process.env.ANTHROPIC_API_KEY)
+    return { planner: realPlanner, critic: realCritic };
+  return { planner: stubPlanner, critic: stubCritic };
+}
 
 /** Offline critic stub — schema-valid audit, no findings of substance. */
 export const stubCritic: Critic = async () => ({

@@ -21,7 +21,9 @@ export interface KickoffLimits {
 export function getLimits(): KickoffLimits {
   return {
     tokenCap: num(process.env.KICKOFF_TOKEN_CAP, 60_000),
-    timeoutMs: num(process.env.KICKOFF_TIMEOUT_MS, 120_000),
+    // 280s: measured Opus-5 (effort medium) planner runs 2–3 min; 120s spuriously
+    // timed out. Fits the worker's 300s maxDuration (Vercel Pro) with margin.
+    timeoutMs: num(process.env.KICKOFF_TIMEOUT_MS, 280_000),
     maxConcurrent: num(process.env.KICKOFF_MAX_CONCURRENT, 1),
     dailyCeiling: num(process.env.KICKOFF_DAILY_CEILING, 20),
   };

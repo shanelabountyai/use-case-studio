@@ -19,7 +19,11 @@
    as an opaque record here, matching the serializer's boundary).
    ============================================================= */
 
-import { z } from "zod";
+// zod/v4 (shipped inside zod 3.25 alongside the classic v3 API) — the Anthropic
+// SDK's zodOutputFormat helper is typed against v4, and these schemas are the
+// ones we hand it for structured output (claude.ts). Self-contained: no other
+// module composes these with the v3-classic schemas used elsewhere in the app.
+import { z } from "zod/v4";
 
 export const Verdict = z.enum(["BUILD", "REFINE", "PARK"]);
 export const TaskShape = z.enum(["lookup", "classify", "actions", "process", "generate", ""]);

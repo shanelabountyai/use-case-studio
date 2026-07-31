@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { kickoffKilled } from "@/lib/kickoff/flags";
 import { claimNextJob, executeJob, finishJob, failInflightJobs, loadCasePayload } from "@/lib/kickoff/worker";
+import { getProvider } from "@/lib/kickoff/provider";
 import { evaluate, type UseCase } from "@/lib/engine";
 
 export const runtime = "nodejs";
@@ -42,7 +43,7 @@ export async function GET(req: Request) {
   // enqueue and execution); the planner must echo this.
   const { verdict } = evaluate(uc as UseCase);
   const startedAt = Date.now();
-  const outcome = await executeJob(job.caseId, uc as UseCase, verdict);
+  const outcome = await executeJob(job.caseId, uc as UseCase, verdict, getProvider());
   await finishJob(job.id, outcome, Date.now() - startedAt); // latency telemetry (BK-6)
   return NextResponse.json({ jobId: job.id, status: outcome.status }, { status: 200 });
 }

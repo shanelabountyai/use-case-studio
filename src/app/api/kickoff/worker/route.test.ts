@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { CASE_POLICY_LOOKUP } from "@/lib/kickoff/fixtures";
 
-vi.mock("@/lib/kickoff/flags", () => ({ kickoffKilled: vi.fn(() => false) }));
+vi.mock("@/lib/kickoff/flags", () => ({
+  kickoffKilled: vi.fn(() => false),
+  kickoffEnabled: vi.fn(() => false), // stub path — executeJob is mocked anyway
+}));
 vi.mock("@/lib/kickoff/worker", () => ({
   claimNextJob: vi.fn(),
   executeJob: vi.fn(),

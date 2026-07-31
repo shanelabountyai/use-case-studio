@@ -17,6 +17,7 @@ import { serializeGrounding } from "./grounding";
 import type { IntegratedPlan, CriticAudit, LaneStatus, Provenance } from "./contracts";
 import { stubPlanner, stubCritic, type Planner, type Critic } from "./provider";
 import { getLimits, type KickoffLimits } from "./limits";
+import { priceUsd, kickoffModel } from "./pricing";
 
 const LEASE_MS = 5 * 60 * 1000; // 5 min — comfortably over a single-shot run on Vercel Pro (300s)
 const MAX_ATTEMPTS = 3;
@@ -95,7 +96,7 @@ async function runPipeline(
   // Token cap: stop before the critic call if the planner already blew the budget.
   if (overCap()) {
     laneStatus.critic = "skipped";
-    return { status: "partial", plan, audit: null, laneStatus, cost: { inputTokens, outputTokens, usd: 0 }, note: `token cap exceeded (${inputTokens + outputTokens}/${limits.tokenCap})` };
+    return { status: "partial", plan, audit: null, laneStatus, cost: { inputTokens, outputTokens, usd: priceUsd(kickoffModel(), inputTokens, outputTokens) }, note: `token cap exceeded (${inputTokens + outputTokens}/${limits.tokenCap})` };
   }
 
   // ── Call 2: critic (independent — sees only plan + grounding) ──
@@ -105,19 +106,19 @@ async function runPipeline(
     outputTokens += r.outputTokens;
     laneStatus.critic = "ok";
     if (overCap())
-      return { status: "partial", plan, audit: r.audit, laneStatus, cost: { inputTokens, outputTokens, usd: 0 }, note: `token cap exceeded (${inputTokens + outputTokens}/${limits.tokenCap})` };
+      return { status: "partial", plan, audit: r.audit, laneStatus, cost: { inputTokens, outputTokens, usd: priceUsd(kickoffModel(), inputTokens, outputTokens) }, note: `token cap exceeded (${inputTokens + outputTokens}/${limits.tokenCap})` };
     return {
       status: "complete",
       plan,
       audit: r.audit,
       laneStatus,
-      cost: { inputTokens, outputTokens, usd: 0 }, // real USD attributed when BK-3 wires the model price
+      cost: { inputTokens, outputTokens, usd: priceUsd(kickoffModel(), inputTokens, outputTokens) },
       note: null,
     };
   } catch {
     laneStatus.critic = "failed";
     // A plan without an audit is non-approvable → partial, never complete.
-    return { status: "partial", plan, audit: null, laneStatus, cost: { inputTokens, outputTokens, usd: 0 }, note: "critic stage failed" };
+    return { status: "partial", plan, audit: null, laneStatus, cost: { inputTokens, outputTokens, usd: priceUsd(kickoffModel(), inputTokens, outputTokens) }, note: "critic stage failed" };
   }
 }
 

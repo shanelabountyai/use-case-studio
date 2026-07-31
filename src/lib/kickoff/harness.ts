@@ -184,14 +184,28 @@ export function deterministicRedTeam(g: GroundingInput): { kind: FabricationKind
   });
 }
 
-/** LAUNCH-BLOCKING GATE — wired in BK-4 with the real critic. Runs Call 2 over
- *  every planted plan and asserts each fabrication is flagged in the audit. A
- *  miss blocks launch. Stubbed here (the stub critic finds nothing).
- *  ponytail: throws until BK-4 supplies a real critic — deliberately not
- *  self-tested against the stub. */
+/** LAUNCH-BLOCKING GATE (BK-4/BK-7). Runs the real critic over every planted
+ *  plan and asserts each fabrication is flagged. A single `caught: false` blocks
+ *  launch. Pass the real critic (getProvider().critic) — the stub finds nothing
+ *  and will fail the gate, which is the intended signal, not a false pass.
+ *
+ *  "Caught" = the critic did NOT wave the plan through: it flagged a fabrication,
+ *  failed verdict-integrity, or returned a non-clean verdict. Each planted kind
+ *  maps to at least one of these (guarantee/vendor → fabricationScan; silent-
+ *  downgrade → verdictIntegrity; all → verdict ≠ SHIP AS-IS). */
 export async function criticFabricationGate(
-  _critic: Critic,
-  _g: GroundingInput,
+  critic: Critic,
+  g: GroundingInput,
 ): Promise<{ kind: FabricationKind; caught: boolean }[]> {
-  throw new Error("criticFabricationGate: wire the real critic in BK-4");
+  const planted = plantedFabrications(g);
+  return Promise.all(
+    planted.map(async (f) => {
+      const { audit } = await critic(f.plan, f.grounding);
+      const caught =
+        audit.verdict !== "SHIP AS-IS" ||
+        audit.fabricationScan.some((s) => s.verdict !== "ok") ||
+        !audit.verdictIntegrity.pass;
+      return { kind: f.kind, caught };
+    }),
+  );
 }

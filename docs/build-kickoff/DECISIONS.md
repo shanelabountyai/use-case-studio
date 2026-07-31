@@ -6,8 +6,22 @@ serializer · BK-1 async plumbing+guards · BK-7 eval scaffold (deterministic
 half) · BK-5 approve gate + Markdown export · BK-6 cost caps/ceilings/telemetry/
 feedback. LLM stages are stubbed behind `provider.ts`. 224 tests green.
 
-**Remaining P0 (needs the Anthropic key + spend):** BK-3 planner, BK-4 critic,
-and the live half of BK-7 (LLM-judge validation + `criticFabricationGate`).
+### Status (2026-07-31): LLM stages live behind the flag
+BK-3 planner + BK-4 critic implemented on the Claude API (`@anthropic-ai/sdk`,
+structured output validated against the contracts.ts Zod schemas, one retry on a
+schema miss). `criticFabricationGate` (BK-7 live half) wired to the real critic.
+Routed via `provider.getProvider()` — real stages only when `KICKOFF_ENABLED` +
+`ANTHROPIC_API_KEY`, else stubs. Still dark. 224 tests green, build clean.
+
+**Measured run (BK-3 requirement)** — `claude-opus-5`, effort medium, invoice-
+classify fixture (REFINE): planner 4.8k in / 9.4k out, critic 14.1k in / 4.4k
+out → **~$0.44/run**, ~33k tokens (well under the 60k cap). Fabrication gate
+5/5 caught (PASS). Latency: planner alone exceeded 120s → timeout default raised
+to **280s** (fits the worker's 300s maxDuration). Cost/latency levers if needed:
+`KICKOFF_MODEL=claude-sonnet-5` or a lower effort in `claude.ts`.
+
+**Remaining P0:** LLM-judge validation vs human ratings before the judge is
+trusted (BK-7); everything else in the P0 pipeline is live-verified.
 
 ### Go-live checklist (do before flipping the feature on)
 1. Apply migrations `0001`–`0003` to the target Neon DB (dev first): `npm run db:migrate`.
@@ -15,8 +29,9 @@ and the live half of BK-7 (LLM-judge validation + `criticFabricationGate`).
    - `ANTHROPIC_API_KEY` — the provider key (BK-3/BK-4).
    - `CRON_SECRET` — any random string; the worker rejects the cron without it.
    - `KICKOFF_ENABLED=true` — flips the trigger on (leave unset to keep dark).
-   - Optional cap overrides: `KICKOFF_TOKEN_CAP` (60000), `KICKOFF_TIMEOUT_MS`
-     (120000), `KICKOFF_MAX_CONCURRENT` (1), `KICKOFF_DAILY_CEILING` (20).
+   - Optional overrides: `KICKOFF_TOKEN_CAP` (60000), `KICKOFF_TIMEOUT_MS`
+     (280000 — raised from 120000 after the BK-3 measured run), `KICKOFF_MODEL`
+     (`claude-opus-5`), `KICKOFF_MAX_CONCURRENT` (1), `KICKOFF_DAILY_CEILING` (20).
    - Optional `KICKOFF_KILL_SWITCH=true` to pause everything.
 3. The `vercel.json` cron hits `/api/kickoff/worker` every minute (Vercel Pro).
 4. Launch gate (BK-7): all deterministic tests green · golden invariants pass ·
