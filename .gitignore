@@ -8,3 +8,5 @@ test-results
 playwright-report
 blob-report
 tsconfig.tsbuildinfo
+.vercel
+.env*
