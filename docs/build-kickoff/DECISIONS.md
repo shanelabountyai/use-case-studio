@@ -44,10 +44,19 @@ mismatch. 242 tests green, build clean.
      (280000 — raised from 120000 after the BK-3 measured run), `KICKOFF_MODEL`
      (`claude-opus-5`), `KICKOFF_MAX_CONCURRENT` (1), `KICKOFF_DAILY_CEILING` (20).
    - Optional `KICKOFF_KILL_SWITCH=true` to pause everything.
-3. The `vercel.json` cron hits `/api/kickoff/worker` every minute (Vercel Pro).
+3. **Vercel plan + cron — both required, neither enforced in code.** The runtime
+   assumes Pro: `worker/route.ts` declares `maxDuration = 300` and a run's wall-
+   clock budget is 280s (Opus-5's planner measured at 2–3 min). Hobby caps Node
+   functions at **60s**, so a live run there is killed mid-planner and never
+   completes — permanent `partial`. Before flipping the flag on:
+   - **Upgrade to Vercel Pro** (for `maxDuration: 300` + the 280s planner budget).
+   - **Set the cron back to every-minute** in `vercel.json` (`* * * * *`). It is
+     currently **daily** (`0 0 * * *`, commit 38f5bc5) so the app deploys clean on
+     Hobby while kickoff is dark — but daily means a queued job waits up to 24h.
 4. Launch gate (BK-7): all deterministic tests green · golden invariants pass ·
-   critic catches 100% of planted fabrications · LLM-judge validated vs human ·
-   run-success ≥95% on the corpus.
+   critic catches 100% of planted fabrications (`BK_LIVE=1 vitest gate.live.test.ts`)
+   · LLM-judge validated vs human (`scripts/judge-validate.mts`) · run-success
+   ≥95% on the corpus.
 
 ---
 
