@@ -1,0 +1,788 @@
+[
+  {
+    "name": "policy-assistant (lookup/BUILD)",
+    "grounding": {
+      "caseId": "00000000-0000-4000-8000-0000000000e0",
+      "caseVersion": "sha256:3ded64f83c6059da",
+      "name": "Internal policy & knowledge assistant",
+      "verdict": "BUILD",
+      "composite": 75,
+      "quadrant": "Quick win",
+      "taskShape": "lookup",
+      "acceptanceBar": "≥90% correct-with-citation on a fixed 100-question HR-authored golden set; zero fabrication; zero leakage of salary bands or individual HR records.",
+      "useCase": {
+        "name": "Internal policy & knowledge assistant",
+        "problem": "Employees can't find answers in scattered HR/policy documents; HR fields the same questions repeatedly.",
+        "currentCost": "~HR hours/week answering repeat policy questions (estimate)",
+        "users": "All employees; HR as owner",
+        "outcome": "Self-serve, citation-backed answers to policy questions",
+        "acceptanceBar": "≥90% correct-with-citation on a fixed 100-question HR-authored golden set; zero fabrication; zero leakage of salary bands or individual HR records.",
+        "dataSources": "SharePoint policy PDFs, employee handbook pages, curated FAQ Slack threads",
+        "dataFormat": "documents",
+        "dataVolume": "medium",
+        "dataSensitivity": "internal",
+        "dataFreshness": "periodic",
+        "latency": "interactive",
+        "budget": "One builder / one quarter",
+        "compliance": "",
+        "oversight": "spot-check",
+        "taskVolume": "high",
+        "taskShape": "lookup",
+        "scores": {
+          "value": 4,
+          "feasibility": 4,
+          "dataReadiness": 3,
+          "risk": 4,
+          "cost": 3,
+          "timeToValue": 4,
+          "fit": 4
+        },
+        "weights": {
+          "value": 25,
+          "feasibility": 15,
+          "dataReadiness": 15,
+          "risk": 15,
+          "cost": 10,
+          "timeToValue": 10,
+          "fit": 10
+        },
+        "thresholds": {
+          "build": 70,
+          "refine": 45
+        }
+      },
+      "evaluation": {
+        "flags": [],
+        "contribs": [
+          {
+            "key": "value",
+            "label": "Business value / impact",
+            "score": 4,
+            "weight": 25
+          },
+          {
+            "key": "feasibility",
+            "label": "Technical feasibility",
+            "score": 4,
+            "weight": 15
+          },
+          {
+            "key": "dataReadiness",
+            "label": "Data readiness",
+            "score": 3,
+            "weight": 15
+          },
+          {
+            "key": "risk",
+            "label": "Risk & governance",
+            "score": 4,
+            "weight": 15
+          },
+          {
+            "key": "cost",
+            "label": "Cost / effort (inverse)",
+            "score": 3,
+            "weight": 10
+          },
+          {
+            "key": "timeToValue",
+            "label": "Time to value",
+            "score": 4,
+            "weight": 10
+          },
+          {
+            "key": "fit",
+            "label": "Strategic fit",
+            "score": 4,
+            "weight": 10
+          }
+        ]
+      },
+      "recommendation": {
+        "architecturePattern": "Retrieval-augmented generation (RAG)",
+        "architectureWhy": "The task is answering questions from an existing document corpus. RAG keeps answers grounded in retrievable sources — which supports the citation requirement — and stays current as documents change, with no retraining.",
+        "hitl": "Human-in-the-loop checkpoint: start with sampled human review calibrated to the acceptance bar; reduce sampling as measured accuracy stabilizes.",
+        "dataAccess": [
+          "Connection pattern: document store → ingestion pipeline → vector index (embeddings) with metadata filters. Sync on the source's update cadence."
+        ],
+        "testingLayers": [
+          {
+            "name": "Offline evaluation",
+            "body": "Build a golden set (even 50–100 carefully chosen items beats none) that covers routine cases, known edge cases, and deliberately hard cases. Every candidate change runs against it. Pass/fail is the stated bar: ≥90% correct-with-citation on a fixed 100-question HR-authored golden set; zero fabrication; zero leakage of salary bands or individual HR records."
+          },
+          {
+            "name": "Scoring method",
+            "body": "Free-form outputs need rubric scoring: a written rubric applied by humans on a sample, optionally scaled with LLM-as-judge — but validate the judge against human ratings on a subsample before trusting it, since judge–human agreement is an empirical question, not an assumption."
+          },
+          {
+            "name": "Human review & red-teaming",
+            "body": "Targeted adversarial testing against this case's identified risks: fabricated answers presented with confident citations. Findings feed the golden set."
+          },
+          {
+            "name": "Staged rollout",
+            "body": "Shadow mode (system runs, humans decide, outputs compared) → limited release with sampled review → full rollout only after the acceptance bar holds on live traffic. Pre-commit the rollback trigger."
+          }
+        ],
+        "crisp": [
+          {
+            "phase": "Business Understanding",
+            "actions": [
+              "Restate the problem as a decision: is solving “Internal policy & knowledge assistant” worth the effort given the current cost (~HR hours/week answering repeat policy questions (estimate))?",
+              "Lock the acceptance bar with the owner: ≥90% correct-with-citation on a fixed 100-question HR-authored golden set; zero fabrication; zero leakage of salary bands or individual HR records.."
+            ]
+          },
+          {
+            "phase": "Data Understanding",
+            "actions": [
+              "Inventory the stated sources (SharePoint policy PDFs, employee handbook pages, curated FAQ Slack threads): who owns them, how access is granted, what the real quality is versus the assumed quality.",
+              "Pull a sample and inspect it by hand — data readiness scores routinely drop after first contact with the actual files."
+            ]
+          },
+          {
+            "phase": "Data Preparation",
+            "actions": [
+              "Convert, clean and chunk documents; strip boilerplate; decide the metadata that retrieval or routing will filter on.",
+              "Establish a repeatable prep pipeline so refreshes aren't manual."
+            ]
+          },
+          {
+            "phase": "Modeling",
+            "actions": [
+              "Build the thinnest version of the chosen architecture that can be scored against the acceptance bar — resist scope until the core loop is measured.",
+              "Version prompts and configuration like code; every change should be attributable when a metric moves."
+            ]
+          },
+          {
+            "phase": "Evaluation",
+            "actions": [
+              "Run the golden set against the acceptance bar (≥90% correct-with-citation on a fixed 100-question HR-authored golden set; zero fabrication; zero leakage of salary bands or individual HR records.) before any user sees the system.",
+              "Log failures by category — retrieval miss, reasoning error, formatting — because each category has a different fix."
+            ]
+          },
+          {
+            "phase": "Deployment",
+            "actions": [
+              "Ship in shadow mode first: system runs, humans still decide, outputs are compared silently.",
+              "Define the rollback trigger in advance: the metric and threshold that pauses the system."
+            ]
+          }
+        ]
+      }
+    },
+    "plan": {
+      "schemaVersion": "1",
+      "verdict": "BUILD",
+      "taskShape": "lookup",
+      "architecturePattern": "Retrieval-augmented generation (RAG)",
+      "executiveSummary": "Build a citation-backed internal policy Q&A assistant over HR/policy documents using retrieval-augmented generation. The spine of the build is the acceptance bar: ≥90% correct-with-citation on a fixed 100-question HR-authored golden set, zero fabrication, and zero leakage of salary bands or individual HR records. The plan front-loads two things that usually decide success in this shape: corpus curation (SharePoint PDFs, handbook pages, curated Slack FAQ threads have uneven quality — data readiness scored 3) and an exclusion/redaction discipline for compensation and individual HR records so sensitive content never enters the index in the first place. Delivery is sized for one builder over one quarter, shipping thin: ingest → index → retrieve → answer-with-citations → score against the golden set → shadow mode → limited release with sampled review → full rollout. Abstention (\"I couldn't find this in policy — here's who to ask\") is treated as a correct behaviour, not a failure, because it is the primary defence against confident fabrication.",
+      "sections": {
+        "architecture": {
+          "heading": "Architecture",
+          "markdown": "**Pattern (from grounding): Retrieval-augmented generation (RAG).** The task is lookup over an existing document corpus, so answers must be generated *from retrieved passages only*, with citations back to the source document and section.\n\n**Components**\n1. **Ingestion & normalisation** — pull SharePoint policy PDFs, handbook pages, and the curated Slack FAQ threads; convert to text; preserve document title, owner, effective date, version, and section heading as metadata.\n2. **Chunking** — chunk on document structure (heading/clause boundaries) rather than fixed character windows, because policy answers usually live in one clause and citation precision matters. Keep the parent-document reference on every chunk so the answer can cite \"Leave Policy v4, §3.2\".\n3. **Index** — a managed vector store (or a search service with vector + keyword hybrid capability). Hybrid retrieval is recommended for this corpus: policy questions often contain exact terms (\"bereavement\", \"notice period\", specific plan names) that lexical matching handles better than embeddings alone.\n4. **Retrieval layer** — top-k retrieval with metadata filters (document status = current, effective date not superseded). Superseded policy versions are filtered out of retrieval, not deleted, so the answer never quotes a retired policy.\n5. **Answer synthesis** — an instruction-tuned general model with a constrained prompt: answer only from provided passages; every factual sentence carries a citation; if the passages do not contain the answer, abstain and route to HR. No parametric-knowledge fallback.\n6. **Guardrails** — a pre-index exclusion filter (salary bands, individual HR records, anything from restricted libraries) plus an output check that blocks responses containing compensation-figure patterns or named-individual HR detail.\n7. **Surface** — an interactive chat surface where employees already work, showing the answer, the citations as clickable links, and a \"this was wrong / unhelpful\" control that writes straight into the failure log.\n\n**Deliberately out of scope for v1:** multi-turn policy reasoning across many documents, personalised answers based on an employee's own record, entitlement calculations, and anything that reads from HRIS. Those change the risk profile and belong in a separate case.\n\n**Human-in-the-loop (from grounding):** sampled human review calibrated to the acceptance bar, with sampling reduced as measured accuracy stabilises. Oversight mode is spot-check, so the review sample must be genuinely random plus a targeted slice of low-retrieval-confidence and abstained answers."
+        },
+        "dataPipeline": {
+          "heading": "Data pipeline",
+          "markdown": "**Sources:** SharePoint policy PDFs, employee handbook pages, curated FAQ Slack threads. Volume is medium; freshness is periodic; sensitivity is internal.\n\n**Step 0 — corpus triage before any code.** HR names, for each source, the canonical current version and what is superseded, draft, or abandoned. The single most common failure in this shape is indexing three vintages of the same leave policy and citing the wrong one. Output is a signed-off source manifest: document, owner, current version, effective date, include/exclude.\n\n**Step 1 — exclusion at the boundary.** Salary bands, compensation matrices, and any document containing individual HR records are excluded from ingestion by library/path/label rules, reviewed by HR. Exclusion at ingest is stronger than filtering at output. Slack FAQ threads are only ingested where they have been curated and fact-checked by HR — raw thread text is treated as unverified and either rewritten into an HR-owned FAQ document or dropped.\n\n**Step 2 — extraction & cleaning.** PDF-to-text with table handling checked by hand on a sample; strip headers, footers, watermarks, and navigation boilerplate. Flag scanned/image-only PDFs early — they either need OCR or need HR to supply a text original.\n\n**Step 3 — chunking & metadata.** Structure-aware chunking with retained heading path. Metadata: document title, owner, version, effective date, status (current/superseded), audience/region if policies differ by location, and source system.\n\n**Step 4 — embedding & indexing.** Batch embed; index with metadata filters exposed to retrieval. Index build is idempotent and re-runnable from the manifest.\n\n**Step 5 — refresh.** Scheduled re-sync on the sources' update cadence (periodic freshness, so a scheduled job is sufficient — no streaming). Change detection on document version/modified date; changed documents are re-chunked and re-embedded, removed documents are removed from the index. Every refresh writes a diff report to HR: documents added, changed, removed. When a policy changes, the affected golden-set questions are re-run.\n\n**Provenance:** every chunk carries its source URI and version so any answer is traceable back to a specific document revision. This is what makes citation auditable rather than decorative."
+        },
+        "evaluation": {
+          "heading": "Evaluation",
+          "markdown": "**The bar (verbatim):** ≥90% correct-with-citation on a fixed 100-question HR-authored golden set; zero fabrication; zero leakage of salary bands or individual HR records.\n\n**Golden set construction.** HR authors the 100 questions — not the builder — drawn from the actual repeat-question load. Composition target: routine high-frequency questions; edge cases (region-specific or role-specific variants); known-hard cases (policy that recently changed, topics covered in two documents); and a set of **out-of-scope questions that must be abstained on**, including direct probes for salary bands and for another employee's HR details. Each item records the expected answer and the expected citation (document + section). The set is frozen; additions go into a separate growth set so the headline number stays comparable across runs.\n\n**Scoring rubric.** Each response is scored on three independent axes:\n- *Correct* — substantively matches the expected answer, no material omission.\n- *Cited* — citation resolves to a real, current document and the cited section actually supports the claim. A right answer with a wrong or unverifiable citation scores as not-correct-with-citation.\n- *Fabrication* — any unsupported factual claim. This is a hard-fail axis; the bar states zero.\n\nAbstention on an out-of-scope or unanswerable item counts as correct. Abstention on an answerable item counts as a miss, tracked separately from wrong answers because the fix differs.\n\n**Method.** Human rubric scoring by HR on the full 100 for every release-gating run. LLM-as-judge may be used for faster iteration loops only after judge–human agreement is measured on a subsample; if agreement is weak, the judge is not used for gating. Judge–human agreement is an empirical question, not an assumption.\n\n**Failure taxonomy.** Every miss is labelled: retrieval miss (right passage not returned), retrieval noise (wrong passage ranked first), synthesis error (passage retrieved but misread), citation error, stale-source error (superseded policy cited), formatting. Chunking and retrieval fixes address the first two; prompt and model changes address the third. Logging by category is what keeps the build from thrashing.\n\n**Red-teaming.** Targeted adversarial testing against the identified risk — fabricated answers presented with confident citations — plus leakage probes: paraphrased and indirect requests for salary bands, requests for a named colleague's leave or disciplinary record, and prompt-injection attempts embedded in ingested documents. Findings become permanent golden-set items.\n\n**Live measurement.** Sampled review of live answers against the same rubric, plus user thumbs-down rate, abstention rate, and zero-result retrieval rate as leading indicators between review cycles."
+        },
+        "governance": {
+          "heading": "Governance",
+          "markdown": "**Owner.** HR owns the assistant, the corpus, and the golden set. The builder owns the pipeline and the evaluation harness. Ambiguity here is what causes stale corpora, so it is named in writing at kickoff.\n\n**Sensitive-data controls.** Two independent layers, because the bar states zero leakage: (1) ingestion exclusion of compensation and individual-record content, governed by the HR-signed source manifest; (2) an output check that blocks compensation-figure and named-individual-record patterns and returns a routing message instead. Leakage probes are permanent golden-set items and are re-run on every release and every corpus refresh.\n\n**Access.** The assistant is internal-only, authenticated against existing employee identity. If any indexed policy is audience-restricted (for example manager-only guidance), that restriction is enforced via metadata filters at retrieval time; if that cannot be enforced cleanly in v1, those documents are excluded from the corpus rather than exposed.\n\n**Fabrication controls.** Answers are generated only from retrieved passages; abstention is an explicitly designed, prompt-enforced behaviour with a defined routing path to HR. Every answer carries citations, and the UI presents them as verifiable links so employees can check the source — the assistant assists retrieval, it does not become the authority.\n\n**Interpretation boundary.** The surface states that the assistant summarises policy documents and that the policy document itself governs. Questions touching individual circumstances, disputes, disciplinary matters, accommodations, or anything with legal consequence are routed to HR rather than answered.\n\n**Change control.** Prompts, chunking parameters, retrieval configuration, and the source manifest are versioned like code. Every change is attributable and is gated on a golden-set run. No config edits in production without a recorded run.\n\n**Audit trail.** Log question, retrieved chunk IDs and versions, generated answer, citations, abstention flag, and guardrail triggers. Retention and the question of whether employee questions are personally identifiable are settled with HR before launch — question logs about sensitive personal topics are themselves sensitive.\n\n**Rollback trigger, pre-committed.** Any confirmed leakage incident, or any confirmed fabrication in sampled live review, pauses the assistant immediately. Sustained sampled accuracy below the bar across a review cycle, or a sharp rise in thumbs-down rate, reverts to limited release. Thresholds are set with HR at Phase 1 and written down before launch, not after an incident."
+        },
+        "delivery": {
+          "heading": "Delivery",
+          "markdown": "**Capacity:** one builder, one quarter. That forces sequencing discipline: corpus and evaluation harness before any interface polish, and one retrieval configuration measured properly rather than three configurations measured casually.\n\n**Order of work.** Lock the bar and the source manifest → stand up ingestion on a curated subset → build the evaluation harness and have HR author the golden set (these run in parallel; the golden set is the long-lead item and HR time must be booked early) → thinnest end-to-end RAG loop → score, fix by failure category, re-score → red-team and leakage probes → shadow mode → limited release with sampled review → full rollout.\n\n**Scope discipline.** No entitlement calculations, no HRIS integration, no personalised answers, no multilingual support in v1 unless the corpus already demands it. Anything that arrives mid-build is logged for v2 rather than absorbed.\n\n**Key dependencies to secure in week one:** read access to the SharePoint libraries; a named HR owner with booked time for the source manifest and the golden set; agreement on where the assistant surfaces; and clarity on question-log retention.\n\n**Main delivery risks.** (1) Corpus quality is worse than assumed — data readiness scored 3, and scanned PDFs, duplicated policy vintages, and uncurated Slack content are the usual culprits; mitigated by hand-inspecting a sample in Phase 1 before committing the schedule. (2) HR golden-set authoring slips, which blocks the gate; mitigated by booking it as a scheduled deliverable, not a favour. (3) Citation precision, not answer correctness, is the typical cause of missing the bar; mitigated by structure-aware chunking and by scoring citation as its own axis from the first run.\n\nAll durations below are planning estimates for a single builder, not commitments."
+        },
+        "integrationNotes": {
+          "heading": "Integration notes",
+          "markdown": "**Document store → pipeline.** Connection pattern from grounding: document store → ingestion pipeline → vector index with metadata filters, synced on the source's update cadence. Use an application identity with read-only scope to the specific approved libraries, not broad tenant-wide read — over-broad access is the most likely path to accidentally indexing compensation or individual-record content.\n\n**Slack FAQ threads.** Treat as a content source requiring human curation, not an automated feed. Preferred v1 approach: HR promotes vetted thread answers into an HR-owned FAQ document that is ingested like any other policy document. This keeps provenance clean and citations meaningful.\n\n**Chat surface.** Deliver where employees already ask — an existing internal chat or intranet surface — using the organisation's existing authentication. Requirements on the surface: render citations as resolvable links, render abstentions with an explicit HR routing path, and expose a feedback control that writes into the failure log with the question and retrieved-chunk IDs attached.\n\n**Interactive latency.** Latency requirement is interactive. Keep the request path to a single retrieval pass plus one generation call for v1; add reranking or multi-hop retrieval only if the golden set shows retrieval misses that a single pass cannot fix, and re-check responsiveness with users when you do. No numeric latency target is asserted here — set one with HR against the live surface.\n\n**Observability.** Instrument retrieval hit rate, zero-result rate, abstention rate, guardrail trigger counts, and per-answer chunk provenance from day one. These are the signals that tell you whether a live regression is a corpus problem or a model problem."
+        }
+      },
+      "dataFlows": [
+        {
+          "name": "Corpus ingestion & refresh",
+          "steps": [
+            "HR-signed source manifest defines included documents, current versions, and exclusions (salary bands, individual HR records)",
+            "Read-only connector pulls approved SharePoint policy PDFs and handbook pages; curated HR-owned FAQ documents included",
+            "Exclusion filter drops restricted paths/labels before any conversion",
+            "Convert to text; strip boilerplate; flag image-only PDFs for OCR or text originals",
+            "Structure-aware chunking with retained heading path and parent-document reference",
+            "Attach metadata: title, owner, version, effective date, status (current/superseded), audience, source URI",
+            "Embed and upsert into the vector index; remove deleted documents; mark superseded versions non-retrievable",
+            "Emit a refresh diff report to HR and re-run golden-set items touching changed documents"
+          ]
+        },
+        {
+          "name": "Employee question → cited answer",
+          "steps": [
+            "Authenticated employee asks a policy question on the chat surface",
+            "Hybrid retrieval (vector + keyword) with metadata filter status = current and audience-appropriate",
+            "Top-k passages assembled with their document, version, and section references",
+            "Constrained generation: answer only from supplied passages, one citation per factual claim",
+            "Output guardrail checks for compensation-figure and individual-record patterns; blocks and routes to HR if triggered",
+            "If passages do not support an answer, return an abstention with an HR routing path",
+            "Return answer with resolvable citation links plus feedback control",
+            "Log question, retrieved chunk IDs and versions, answer, citations, abstention flag, guardrail triggers"
+          ]
+        },
+        {
+          "name": "Evaluation & release gate",
+          "steps": [
+            "HR authors and freezes the 100-question golden set with expected answers, expected citations, and must-abstain items",
+            "Candidate change (prompt, chunking, retrieval config, model) is versioned and run against the frozen set",
+            "Rubric scoring on three axes: correct, cited, fabrication-free; abstention correctness tracked separately",
+            "Misses labelled by failure category: retrieval miss, retrieval noise, synthesis error, citation error, stale source, formatting",
+            "Leakage and prompt-injection probes run as a mandatory hard gate",
+            "Release only if ≥90% correct-with-citation with zero fabrication and zero leakage; otherwise fix by category and re-run",
+            "Post-launch: sampled live answers scored on the same rubric; new failures added to the growth set"
+          ]
+        }
+      ],
+      "milestones": [
+        {
+          "phase": "Phase 1 — Lock the bar and meet the corpus",
+          "duration": "~2–3 weeks (estimate)",
+          "goal": "Confirm the acceptance bar with HR, produce a signed source manifest, and hand-inspect a real sample of the documents before committing to the rest of the schedule.",
+          "exitCriterion": "HR has signed the source manifest (current vs superseded, include vs exclude, compensation and individual-record exclusions named) and a hand-inspected sample of at least 20 documents is documented with extraction quality issues listed; the acceptance bar is restated verbatim and agreed as the release gate.",
+          "ownerOfRisk": "HR owner (corpus authority) with builder support"
+        },
+        {
+          "phase": "Phase 2 — Ingestion pipeline + golden set authored",
+          "duration": "~3 weeks (estimate)",
+          "goal": "Repeatable ingest-chunk-embed-index pipeline over the approved corpus, running in parallel with HR authoring the fixed 100-question golden set.",
+          "exitCriterion": "Pipeline re-runs end to end from the manifest without manual steps and produces a refresh diff report; HR has delivered and frozen 100 questions with expected answers, expected citations, and a named subset of must-abstain items including salary-band and individual-record probes.",
+          "ownerOfRisk": "Builder (pipeline); HR owner (golden set — the schedule-critical item)"
+        },
+        {
+          "phase": "Phase 3 — Thinnest RAG loop scored against the bar",
+          "duration": "~3 weeks (estimate)",
+          "goal": "One end-to-end retrieve-and-answer-with-citations loop plus the evaluation harness, with a first full scored run and failures classified.",
+          "exitCriterion": "A full golden-set run is scored on all three rubric axes with every miss labelled by failure category, and the run is reproducible from versioned prompt and retrieval configuration.",
+          "ownerOfRisk": "Builder"
+        },
+        {
+          "phase": "Phase 4 — Iterate to the bar, then red-team",
+          "duration": "~3 weeks (estimate)",
+          "goal": "Close failures by category (chunking and retrieval for retrieval misses, prompt for synthesis and citation errors) and harden against fabrication, leakage, and prompt injection.",
+          "exitCriterion": "≥90% correct-with-citation on the frozen 100-question set with zero fabrication, plus zero leakage across all salary-band, individual-record, and injection probes; red-team findings added as permanent golden-set items.",
+          "ownerOfRisk": "Builder, with HR as rubric scorer"
+        },
+        {
+          "phase": "Phase 5 — Shadow mode",
+          "duration": "~2 weeks (estimate)",
+          "goal": "Run against real employee questions routed to HR: the assistant answers silently, HR still answers the employee, and outputs are compared.",
+          "exitCriterion": "A documented comparison across a sample of real questions shows the bar holding on live traffic, with the pre-committed rollback trigger (metric and threshold) written down and agreed before any employee sees an assistant answer.",
+          "ownerOfRisk": "HR owner"
+        },
+        {
+          "phase": "Phase 6 — Limited release with sampled review",
+          "duration": "~2–3 weeks (estimate)",
+          "goal": "Release to one department or volunteer cohort with spot-check review of a random sample plus all abstentions and guardrail triggers.",
+          "exitCriterion": "Sampled live review holds the bar across a full review cycle with zero confirmed fabrication and zero confirmed leakage; feedback and failure logs are flowing into the growth set.",
+          "ownerOfRisk": "HR owner with builder on-call"
+        },
+        {
+          "phase": "Phase 7 — Full rollout and steady-state ownership",
+          "duration": "~2 weeks (estimate) then ongoing",
+          "goal": "Open to all employees and hand over the operating routine: refresh cadence, review sampling, and golden-set maintenance.",
+          "exitCriterion": "Bar holds on sampled live traffic after full rollout; a written runbook names the refresh schedule, the review sampling rate and its step-down conditions, the rollback trigger, and the HR owner responsible for corpus and golden-set upkeep.",
+          "ownerOfRisk": "HR owner"
+        }
+      ],
+      "assumptions": [
+        "All phase durations are planning estimates for a single builder over one quarter, not commitments; Phase 1 findings on corpus quality may change them.",
+        "Assumes HR can commit named time to author and freeze the 100-question golden set during Phase 2 — this is the schedule-critical dependency.",
+        "Assumes read-only access to the relevant SharePoint libraries can be granted in week one via an application identity scoped to approved paths.",
+        "Assumes compensation data and individual HR records live in identifiable locations (libraries, labels, or paths) so they can be excluded at ingest rather than filtered at output.",
+        "Assumes policy PDFs are text-based or convertible; image-only scanned documents would add OCR work not reflected in the estimates above.",
+        "Assumes Slack FAQ content will be promoted into HR-owned curated documents rather than ingested as raw thread text.",
+        "Assumes a single canonical current version can be identified for each policy; heavy version ambiguity would extend Phase 1.",
+        "No latency, accuracy, cost, or throughput figures are asserted in this plan beyond the acceptance bar stated in the grounding; live latency targets are to be set with HR against the actual surface.",
+        "Assumes an existing internal chat or intranet surface with authentication is available to host the assistant, avoiding a bespoke front-end build.",
+        "Assumes retention and privacy handling for employee question logs can be agreed with HR before launch."
+      ],
+      "refineGate": null
+    },
+    "audit": {
+      "schemaVersion": "1",
+      "fabricationScan": [
+        {
+          "quote": "Superseded policy versions are filtered out of retrieval, not deleted, so the answer never quotes a retired policy.",
+          "verdict": "must-remove"
+        },
+        {
+          "quote": "an exclusion/redaction discipline for compensation and individual HR records so sensitive content never enters the index in the first place",
+          "verdict": "must-remove"
+        },
+        {
+          "quote": "The single most common failure in this shape is indexing three vintages of the same leave policy and citing the wrong one.",
+          "verdict": "must-label"
+        },
+        {
+          "quote": "Citation precision, not answer correctness, is the typical cause of missing the bar",
+          "verdict": "must-label"
+        },
+        {
+          "quote": "a hand-inspected sample of at least 20 documents is documented with extraction quality issues listed",
+          "verdict": "must-label"
+        },
+        {
+          "quote": "Exclusion at ingest is stronger than filtering at output.",
+          "verdict": "ok"
+        }
+      ],
+      "consistencyIssues": [
+        "Phase durations sum to ~17–19 weeks (2–3 + 3 + 3 + 3 + 2 + 2–3 + 2), which exceeds the grounding budget of 'One builder / one quarter' (~13 weeks). The plan asserts 'Capacity: one builder, one quarter. That forces sequencing discipline' without reconciling the overflow or naming what gets cut.",
+        "Phase 2 exit requires the pipeline to run 'without manual steps', but the data pipeline mandates human-in-the-loop curation ('Slack FAQ threads are only ingested where they have been curated and fact-checked by HR', 'flag image-only PDFs for OCR or text originals') — the fully automated exit criterion conflicts with the designed manual gates.",
+        "Governance says audience-restricted docs are enforced 'via metadata filters at retrieval time', and the answer flow filters 'audience-appropriate', but no component in the architecture or ingestion flow establishes where per-employee audience/entitlement attributes come from — HRIS and personalised data are explicitly out of scope.",
+        "Evaluation promises 'Human rubric scoring by HR on the full 100 for every release-gating run' while Phase 4 iterates by category and re-runs repeatedly; the HR scoring load per iteration is never sized against the same HR capacity flagged as the schedule-critical dependency."
+      ],
+      "verdictIntegrity": {
+        "pass": true,
+        "note": "Plan verdict 'BUILD' matches grounding verdict 'BUILD'; the acceptance bar is quoted verbatim and used as the release gate, and the plan does not soften the bar or upgrade the case (it acknowledges dataReadiness=3 rather than glossing it)."
+      },
+      "gaps": [
+        {
+          "title": "No stop/refine decision if the bar is not met",
+          "detail": "Phase 4's exit criterion is '≥90% correct-with-citation ... plus zero leakage', but there is no defined path if repeated iterations plateau below the bar — no iteration cap, no escalation, no descope-or-kill decision. As written, Phase 4 can consume the remaining quarter indefinitely."
+        },
+        {
+          "title": "'Zero fabrication' and 'zero leakage' are unmeasurable as stated on a 100-item set",
+          "detail": "The plan treats a clean run on 100 questions plus a finite probe set as evidence of 'zero fabrication; zero leakage' with no statistical framing (confidence interval on a 90% target measured on n=100, probe coverage, or residual-risk statement). It should state explicitly that the golden set bounds, not proves, the zero claims."
+        },
+        {
+          "title": "Prompt-injection defence is tested but not designed",
+          "detail": "Injection appears only in evaluation ('prompt-injection attempts embedded in ingested documents') and as a hard gate, but the architecture's guardrails section names only a pre-index exclusion filter and a compensation/named-individual output check. No sanitisation or passage-isolation control exists in the request path to actually mitigate an injection found by red-teaming."
+        },
+        {
+          "title": "Rollback is a pause with no fallback experience",
+          "detail": "'Any confirmed leakage incident ... pauses the assistant immediately' — but nothing specifies what employees see, how HR absorbs the returning question volume, whether the index is rebuilt or purged after a leakage incident, or the criteria to un-pause."
+        },
+        {
+          "title": "No cost/effort envelope for a high-volume task",
+          "detail": "taskVolume is 'high' and the surface is org-wide, yet there is no per-query cost, embedding/re-embedding cost on refresh, or index-size consideration — the grounding's cost score of 3 goes unaddressed anywhere in delivery."
+        }
+      ],
+      "acceptanceBarSpine": {
+        "isSpine": true,
+        "evidence": "The bar is quoted verbatim in the executive summary and evaluation, and Phase 4's exit criterion is '≥90% correct-with-citation on the frozen 100-question set with zero fabrication, plus zero leakage', with Phases 5–7 re-testing the same bar on live traffic."
+      },
+      "overclaims": [
+        "'so the answer never quotes a retired policy' — metadata filters reduce but cannot eliminate stale citations (mis-tagged status, manifest lag, chunk drift); the plan even defines a 'stale-source error' failure category, contradicting the absolute.",
+        "'so sensitive content never enters the index in the first place' — depends on the plan's own stated assumption that 'compensation data and individual HR records live in identifiable locations'; if that assumption fails, so does 'never'.",
+        "'Abstention ... is the primary defence against confident fabrication' presented as settled, while the actual defence depends on prompt compliance that has not yet been measured.",
+        "'This is what makes citation auditable rather than decorative' — provenance metadata enables auditability; it does not establish that the cited section supports the claim, which the rubric itself treats as a separate axis."
+      ],
+      "verdict": "SHIP WITH FIXES",
+      "topFixes": [
+        "Remove the absolute guarantees ('never quotes a retired policy', 'sensitive content never enters the index') and replace with the residual-risk framing the failure taxonomy already implies.",
+        "Reconcile the ~17–19 week milestone total against the one-quarter budget: either compress/parallelise explicitly or name which phases are the descope candidates, and add a stop/refine decision point if Phase 4 plateaus below the bar.",
+        "Label the unsourced empirical assertions ('the single most common failure in this shape', 'citation precision ... is the typical cause', 'at least 20 documents') as builder judgement/heuristics rather than fact."
+      ]
+    },
+    "humanScore": null
+  },
+  {
+    "name": "invoice-triage (classify/REFINE)",
+    "grounding": {
+      "caseId": "00000000-0000-4000-8000-0000000000e0",
+      "caseVersion": "sha256:20a6ad9d52cc4417",
+      "name": "Invoice/document triage classifier",
+      "verdict": "REFINE",
+      "composite": 64,
+      "quadrant": "Quick win",
+      "taskShape": "classify",
+      "acceptanceBar": "≥95% routing accuracy on a frozen 500-doc held-out set, aggregate and per-category; every below-threshold prediction and any error defers to a human rather than auto-routing.",
+      "useCase": {
+        "name": "Invoice/document triage classifier",
+        "problem": "AP staff manually sort incoming invoices/documents into categories; slow and error-prone at volume.",
+        "currentCost": "~1 FTE of effort (unvalidated value anchor, estimate)",
+        "users": "Accounts-payable team",
+        "outcome": "Auto-route confident classifications; defer the rest to a human queue",
+        "acceptanceBar": "≥95% routing accuracy on a frozen 500-doc held-out set, aggregate and per-category; every below-threshold prediction and any error defers to a human rather than auto-routing.",
+        "dataSources": "Shared AP inbox / AP drive of historically foldered documents (noisy labels)",
+        "dataFormat": "mixed",
+        "dataVolume": "large",
+        "dataSensitivity": "pii",
+        "dataFreshness": "realtime",
+        "latency": "batch",
+        "budget": "Unscoped — gates the build",
+        "compliance": "Vendor bank details under retention rules",
+        "oversight": "spot-check",
+        "taskVolume": "high",
+        "taskShape": "classify",
+        "scores": {
+          "value": 4,
+          "feasibility": 3,
+          "dataReadiness": 2,
+          "risk": 3,
+          "cost": 3,
+          "timeToValue": 3,
+          "fit": 4
+        },
+        "weights": {
+          "value": 25,
+          "feasibility": 15,
+          "dataReadiness": 15,
+          "risk": 15,
+          "cost": 10,
+          "timeToValue": 10,
+          "fit": 10
+        },
+        "thresholds": {
+          "build": 70,
+          "refine": 45
+        }
+      },
+      "evaluation": {
+        "flags": [
+          {
+            "sev": "warn",
+            "text": "Data readiness is weak — expect the data-preparation phase to dominate the timeline."
+          }
+        ],
+        "contribs": [
+          {
+            "key": "value",
+            "label": "Business value / impact",
+            "score": 4,
+            "weight": 25
+          },
+          {
+            "key": "feasibility",
+            "label": "Technical feasibility",
+            "score": 3,
+            "weight": 15
+          },
+          {
+            "key": "dataReadiness",
+            "label": "Data readiness",
+            "score": 2,
+            "weight": 15
+          },
+          {
+            "key": "risk",
+            "label": "Risk & governance",
+            "score": 3,
+            "weight": 15
+          },
+          {
+            "key": "cost",
+            "label": "Cost / effort (inverse)",
+            "score": 3,
+            "weight": 10
+          },
+          {
+            "key": "timeToValue",
+            "label": "Time to value",
+            "score": 3,
+            "weight": 10
+          },
+          {
+            "key": "fit",
+            "label": "Strategic fit",
+            "score": 4,
+            "weight": 10
+          }
+        ]
+      },
+      "recommendation": {
+        "architecturePattern": "Direct prompting with structured output; evaluate a fine-tuned small model once volume justifies it",
+        "architectureWhy": "Classification against a fixed category set is a constrained task: a well-specified prompt with an enumerated label schema and a confidence threshold covers it without retrieval or agent machinery.",
+        "hitl": "Human-in-the-loop checkpoint: sampled review of outputs touching sensitive fields, plus automated PII-leak checks on every response.",
+        "dataAccess": [
+          "Connection pattern: document store → ingestion pipeline → vector index (embeddings) with metadata filters. Sync on the source's update cadence — sources change constantly, so schedule frequent re-indexing and mark result freshness.",
+          "Connection pattern: read-only database/API access through a service account with least-privilege scope; queries via a defined tool interface (e.g. an MCP connector), never raw credentials in prompts."
+        ],
+        "testingLayers": [
+          {
+            "name": "Offline evaluation",
+            "body": "Build a golden set (a few hundred labeled items is a reasonable start; grow it with production failures) that covers routine cases, known edge cases, and deliberately hard cases. Every candidate change runs against it. Pass/fail is the stated bar: ≥95% routing accuracy on a frozen 500-doc held-out set, aggregate and per-category; every below-threshold prediction and any error defers to a human rather than auto-routing."
+          },
+          {
+            "name": "Scoring method",
+            "body": "Classification permits exact-match scoring against labels — cheap, objective, automatable. Track per-category accuracy, not just the aggregate; the aggregate hides the categories that fail."
+          },
+          {
+            "name": "Human review & red-teaming",
+            "body": "Targeted adversarial testing against this case's identified risks: prompts engineered to extract sensitive records; systematic misrouting of a minority category. Findings feed the golden set."
+          },
+          {
+            "name": "Staged rollout",
+            "body": "Shadow mode (system runs, humans decide, outputs compared) → limited release with sampled review → full rollout only after the acceptance bar holds on live traffic. Pre-commit the rollback trigger."
+          }
+        ],
+        "crisp": [
+          {
+            "phase": "Business Understanding",
+            "actions": [
+              "Restate the problem as a decision: is solving “Invoice/document triage classifier” worth the effort given the current cost (~1 FTE of effort (unvalidated value anchor, estimate))?",
+              "Lock the acceptance bar with the owner: ≥95% routing accuracy on a frozen 500-doc held-out set, aggregate and per-category; every below-threshold prediction and any error defers to a human rather than auto-routing.."
+            ]
+          },
+          {
+            "phase": "Data Understanding",
+            "actions": [
+              "Inventory the stated sources (Shared AP inbox / AP drive of historically foldered documents (noisy labels)): who owns them, how access is granted, what the real quality is versus the assumed quality.",
+              "Pull a sample and inspect it by hand — data readiness scores routinely drop after first contact with the actual files."
+            ]
+          },
+          {
+            "phase": "Data Preparation",
+            "actions": [
+              "Convert, clean and chunk documents; strip boilerplate; decide the metadata that retrieval or routing will filter on.",
+              "Add a redaction/masking pass for sensitive fields before anything reaches a model, and record what was removed."
+            ]
+          },
+          {
+            "phase": "Modeling",
+            "actions": [
+              "Build the thinnest version of the chosen architecture that can be scored against the acceptance bar — resist scope until the core loop is measured.",
+              "Version prompts and configuration like code; every change should be attributable when a metric moves."
+            ]
+          },
+          {
+            "phase": "Evaluation",
+            "actions": [
+              "Run the golden set against the acceptance bar (≥95% routing accuracy on a frozen 500-doc held-out set, aggregate and per-category; every below-threshold prediction and any error defers to a human rather than auto-routing.) before any user sees the system.",
+              "Log failures by category — retrieval miss, reasoning error, formatting — because each category has a different fix."
+            ]
+          },
+          {
+            "phase": "Deployment",
+            "actions": [
+              "Ship in shadow mode first: system runs, humans still decide, outputs are compared silently.",
+              "Define the rollback trigger in advance: the metric and threshold that pauses the system."
+            ]
+          }
+        ]
+      }
+    },
+    "plan": {
+      "schemaVersion": "1",
+      "verdict": "REFINE",
+      "taskShape": "classify",
+      "architecturePattern": "Direct prompting with structured output; evaluate a fine-tuned small model once volume justifies it",
+      "executiveSummary": "Invoice/document triage is a constrained classification task with strong business value (score 4) and strategic fit, but it enters the build as REFINE (composite 64) for two specific reasons: data readiness is weak (score 2 — the label source is historically foldered AP documents with noisy labels), and budget is unscoped. The plan therefore front-loads a label-truth exercise: before any model work, prove that a frozen 500-document held-out set can be labelled to an agreed standard by AP subject-matter experts, and that per-category volumes are sufficient to measure per-category accuracy at all. The architecture stays deliberately thin — direct prompting against an enumerated label schema with structured output and a confidence threshold, with a fine-tuned small model evaluated only if volume and cost later justify it. Everything below the confidence threshold, and every parse or pipeline error, routes to the human AP queue rather than auto-routing; that fail-closed behaviour is part of the acceptance bar, not an operational nicety. Because documents carry PII and vendor bank details under retention rules, a redaction/masking pass and least-privilege read-only access sit ahead of the model on every path. The refine gate below defines what must be true to proceed to full build, and equally what should stop the work.",
+      "sections": {
+        "architecture": {
+          "heading": "Architecture",
+          "markdown": "**Pattern (as grounded): Direct prompting with structured output; evaluate a fine-tuned small model once volume justifies it.**\n\nWhy this and not more: the label set is fixed and enumerable. A prompt carrying the category definitions plus a structured-output schema (`{category: enum, confidence: number, evidence_snippet: string, abstain: bool}`) covers the task without retrieval or agent machinery. The grounding notes a vector-index connection pattern; treat retrieval as **out of scope for the first build** and revisit only if evaluation shows failures that stem from missing vendor/context knowledge rather than from ambiguous category definitions.\n\nComponents:\n\n1. **Intake watcher** — polls the shared AP inbox/drive on the source's update cadence, deduplicates by content hash, records provenance (source path, arrival time, original filename).\n2. **Normalisation layer** — mixed formats mean a converter fan-out: native-text PDFs, scanned images requiring OCR, office documents, and email bodies with attachments. Each path emits the same normalised text-plus-metadata record with a flag for extraction quality. Low-quality extraction is a first-class abstain reason, not something the classifier should guess through.\n3. **Redaction/masking pass** — vendor bank details and other sensitive fields are masked before text reaches a model; the mask map is stored separately with the retention rules applied. Log what was removed so redaction bugs are diagnosable.\n4. **Classifier call** — enumerated label schema, temperature at the low end, structured output validated against the schema. A schema-validation failure is an error, and errors defer to human review by design.\n5. **Confidence gate** — a single tunable threshold. Above: auto-route. Below, or abstain, or error: human queue with the model's suggested category shown as a hint, never as a pre-selection.\n6. **Router + audit log** — writes the routing decision, the input hash, prompt version, model version, confidence, and outcome. This log is the substrate for per-category accuracy tracking and for the rollback trigger.\n\nPrompt, category definitions, and threshold are versioned as code so any metric movement is attributable to a specific change.\n\n**Fine-tuning decision point:** defer. Only evaluate a fine-tuned small model after the prompted baseline has been measured against the acceptance bar and after per-category volumes are known; the trade is inference cost against label-quality dependence, and label quality is currently the weak link."
+        },
+        "dataPipeline": {
+          "heading": "Data pipeline & label truth",
+          "markdown": "This is the phase the grounding flags as dominant, and the plan treats it as the actual project risk.\n\n**The core problem:** folder location in a historical AP drive is a *proxy* for the correct category, not the category itself. Documents get filed in the wrong folder, refiled, duplicated across folders, or dumped in a catch-all. Training or evaluating against folder names uncritically produces a system that reproduces AP's historical filing errors and an accuracy number that measures agreement with noise.\n\n**Steps:**\n\n1. **Source inventory** — who owns the inbox and the drive, how read-only access is granted (service account, least-privilege scope, defined tool interface; no raw credentials in prompts), what the retention rules on vendor bank details actually require in terms of storage location and deletion.\n2. **Category schema lock** — with the AP team, write a one-paragraph definition and 2–3 worked examples per category, including the disambiguation rules for the pairs humans argue about. Ambiguity here shows up later as unfixable per-category accuracy failure.\n3. **Label audit** — draw a stratified sample across folders and have AP SMEs re-label it blind to the folder name. This yields two critical numbers: the folder-label agreement rate (how noisy the proxy is) and inter-annotator agreement (the ceiling on measurable accuracy). If humans disagree with each other more than the acceptance bar's tolerance, the bar is not measurable as written and must be renegotiated before build.\n4. **Frozen held-out set** — 500 documents, SME-labelled with disagreements adjudicated, stratified so every in-scope category has enough instances for per-category accuracy to mean something. Sparse categories are either merged, or explicitly declared always-defer-to-human. Freeze it, store it separately, and never tune against it; a separate development set absorbs iteration.\n5. **Redaction validation** — run automated PII/bank-detail detection over redacted output and hand-inspect a sample. Redaction failures block progress.\n6. **Drift hooks** — new vendors and new document types appear continuously; the pipeline records unseen-vendor and unseen-layout signals as abstain reasons and as inputs to a periodic golden-set refresh."
+        },
+        "evaluation": {
+          "heading": "Evaluation",
+          "markdown": "**Acceptance bar (the spine): ≥95% routing accuracy on a frozen 500-doc held-out set, aggregate *and per-category*; every below-threshold prediction and any error defers to a human rather than auto-routing.**\n\nScoring is exact match against adjudicated labels — objective and automatable. Two properties are tested separately:\n\n- **Accuracy** on documents the system chose to auto-route.\n- **Deferral integrity** — that nothing below threshold, no abstain, and no schema/pipeline error ever reaches the auto-route path. This is tested by fault injection (malformed responses, timeouts, OCR failures, unreadable files), not only by observation.\n\nReport per-category accuracy always; the aggregate hides the minority categories that fail, and misrouting a minority category is a named risk. Also report the auto-route rate alongside accuracy — a system that defers nearly everything can hit 95% while delivering no relief to the AP team. Set an explicit minimum useful auto-route rate with the business owner during the refine gate; the pair (accuracy, coverage) is the real target.\n\n**Layers:**\n- *Offline* — development golden set (routine, known-edge, deliberately hard cases) run on every prompt/config change; grow it from production failures. Frozen 500-doc set reserved for gate decisions only.\n- *Red-teaming* — attempts to extract sensitive records via document content injection; systematic probing for minority-category misrouting; documents that plausibly belong to two categories. Findings become golden-set entries.\n- *Shadow mode* — system runs on live intake, humans decide, decisions compared silently. This is where offline accuracy meets real-world document mix.\n- *Limited release* — auto-route a subset of categories or a subset of volume with sampled review, per the spot-check oversight model.\n- *Full rollout* — only after the bar holds on live traffic.\n\nFailure taxonomy for every logged error: extraction/OCR failure, ambiguous category definition, reasoning error, schema/formatting error, unseen document type. Each has a different fix and a different owner."
+        },
+        "governance": {
+          "heading": "Governance, PII & oversight",
+          "markdown": "**Data sensitivity is PII, and vendor bank details fall under retention rules — this constrains design, not just policy documents.**\n\n- **Access** — read-only service account with least-privilege scope over the AP inbox/drive, reached through a defined tool interface. No credentials in prompts. Access is logged and reviewed.\n- **Minimisation** — redaction/masking runs before the model call. Bank details, account numbers, and personal identifiers are masked; the classifier is designed to work from document structure and type-level signals rather than from those fields. Confirm during the label audit that masking does not remove the signal the classifier needs; if a category is only distinguishable by a sensitive field, escalate that as a design decision rather than quietly unmasking.\n- **Retention** — model inputs, outputs, and audit logs inherit the retention rules applying to the source documents. Define retention windows for prompt/response logs explicitly before shadow mode, including whether any third-party inference provider retains data and for how long; if that cannot be established for a candidate provider, that provider is not viable for this case.\n- **Oversight (stated: spot-check)** — sampled review of auto-routed decisions at a rate agreed with the AP owner, weighted toward low-confidence-but-above-threshold cases and toward minority categories. Every human queue item is reviewed by construction. Automated PII-leak checks run on every model response.\n- **Accountability** — the AP process owner owns routing outcomes; the delivery team owns system behaviour. Prompt versions, category definitions, threshold values, and model versions are all recorded per decision so any disputed routing can be reconstructed.\n- **Pre-committed rollback trigger** — agreed before shadow mode ends: a named metric (e.g. rolling per-category accuracy on sampled review, or a deferral-integrity breach) and a threshold that pauses auto-routing and returns all volume to the human queue. Any confirmed PII leak or any auto-routed decision that bypassed the confidence gate is an immediate pause condition regardless of accuracy."
+        },
+        "delivery": {
+          "heading": "Delivery approach",
+          "markdown": "REFINE means the first phases exist to answer questions, not to ship. Do not staff a full build until the refine gate clears.\n\n**Sequencing logic:** category schema → label truth → frozen evaluation set → thinnest classifier → measure → gate → staged rollout. Data preparation dominates, per the grounding flag; plan capacity accordingly and expect the readiness picture to worsen on first contact with the real files.\n\n**Two things gate the build and are not engineering work:**\n1. *Budget* — currently unscoped. Estimate cost per document across the mixed-format intake (OCR is often the larger line item for scanned documents, an expectation to validate rather than a figure to assert) and compare against the ~1 FTE anchor, which the grounding itself marks as unvalidated. Validate that anchor with the AP owner: actual hours spent sorting, not an assumed headcount.\n2. *Bar measurability* — if inter-annotator agreement among AP SMEs sits at or below the acceptance bar, ≥95% per-category is not measurable and the bar must be restated (e.g. narrower category set, or per-category bars that differ) before build.\n\n**Roles:** an AP subject-matter expert with authority to adjudicate labels (the single most load-bearing role); a data engineer for intake and normalisation; an ML/prompt engineer; a data-protection reviewer signing off redaction and retention. Absence of a committed SME is a stop condition.\n\n**Working practices:** prompts, category definitions, and thresholds versioned in the same repository as code; every evaluation run recorded with its input version; the frozen set touched only at gates. Durations below are estimates only."
+        },
+        "integrationNotes": {
+          "heading": "Integration notes",
+          "markdown": "Latency is stated as batch and volume as high, which is favourable: classification can run on a schedule rather than synchronously, allowing batched inference, retry on transient failure, and cost control. Freshness is stated as realtime for the source — reconcile these by polling frequently for arrival but processing in batches, and mark each routing decision with its processing timestamp so AP can see how current the queue is.\n\nDownstream integration is a write into whatever AP workflow or folder structure currently receives sorted documents. Two requirements: the write must be idempotent (reprocessing must not create duplicates), and every auto-routed document must remain reversible — a human correction path that both fixes the routing and feeds the correction back as a labelled example. Corrections are the highest-value source of golden-set growth.\n\nThe human queue is a product surface, not an overflow bin: it should show the document, the suggested category as a non-preselected hint, the confidence, and the abstain reason. If the queue is unpleasant to work, staff will bypass it and the fail-closed design stops protecting anything."
+        }
+      },
+      "dataFlows": [
+        {
+          "name": "Document intake → routing decision",
+          "steps": [
+            "Watcher detects new document in AP inbox/drive; content hash computed, duplicate suppressed",
+            "Provenance recorded (source path, arrival time, original filename)",
+            "Format-specific normalisation (native text extraction, OCR for scans, office/email parsing) emits normalised text plus extraction-quality flag",
+            "Redaction/masking pass removes vendor bank details and personal identifiers; mask map stored separately under retention rules",
+            "Classifier called with enumerated category schema; structured output validated against schema",
+            "Confidence gate applied: above threshold → auto-route; below threshold, abstain, low extraction quality, or any error → human AP queue with suggestion shown as hint",
+            "Decision written to audit log with prompt version, model version, confidence, and outcome",
+            "Automated PII-leak check runs on the model response"
+          ]
+        },
+        {
+          "name": "Label truth & frozen evaluation set",
+          "steps": [
+            "Stratified sample drawn across historical folders",
+            "AP SMEs re-label blind to folder name",
+            "Folder-label agreement rate and inter-annotator agreement computed",
+            "Disagreements adjudicated; category definitions revised where disagreement is definitional",
+            "500-document held-out set assembled with per-category coverage checked, then frozen and stored separately",
+            "Separate development golden set built for iteration"
+          ]
+        },
+        {
+          "name": "Correction feedback loop",
+          "steps": [
+            "Human corrects an auto-routed or queued decision in the AP workflow",
+            "Correction captured with original prediction, confidence, and prompt/model version",
+            "Failure classified by taxonomy (extraction, ambiguous definition, reasoning, schema, unseen type)",
+            "Case added as candidate to development golden set",
+            "Periodic review decides whether the fix is a prompt change, a definition change, a threshold change, or a pipeline change"
+          ]
+        }
+      ],
+      "milestones": [
+        {
+          "phase": "Phase 0 — Scope the gate",
+          "duration": "~1–2 weeks (estimate)",
+          "goal": "Validate the ~1 FTE cost anchor with the AP owner, lock the category schema with written definitions and worked examples, and confirm read-only least-privilege access plus retention obligations for vendor bank details.",
+          "exitCriterion": "Signed-off category list with per-category definitions; validated effort baseline replacing the unvalidated anchor; access granted and documented; committed AP subject-matter expert named for label adjudication.",
+          "ownerOfRisk": "AP process owner"
+        },
+        {
+          "phase": "Phase 1 — Label truth & frozen set",
+          "duration": "~3–5 weeks (estimate; expect this to dominate)",
+          "goal": "Establish whether the acceptance bar is measurable against this data, and build the frozen 500-document held-out set plus a separate development golden set.",
+          "exitCriterion": "Frozen 500-doc set exists with SME-adjudicated labels and sufficient per-category coverage; inter-annotator agreement measured and shown to leave headroom above the ≥95% per-category bar, or the bar formally restated; folder-label noise rate documented.",
+          "ownerOfRisk": "Data lead with AP SME"
+        },
+        {
+          "phase": "Phase 2 — Refine gate decision",
+          "duration": "~1 week (estimate)",
+          "goal": "Decide go/no-go on the full build using Phase 0–1 evidence plus a costed estimate of per-document processing across the mixed-format intake.",
+          "exitCriterion": "Written gate decision against the refineGate conditions; if go, an approved budget envelope and a pre-committed rollback trigger; if no-go, the noGo condition cited and the work stopped.",
+          "ownerOfRisk": "Sponsor"
+        },
+        {
+          "phase": "Phase 3 — Thin classifier + redaction",
+          "duration": "~2–4 weeks (estimate)",
+          "goal": "Build the minimum viable path: normalisation, redaction, direct prompting with structured output, confidence gate, audit log. No retrieval, no fine-tuning.",
+          "exitCriterion": "End-to-end run on the development golden set with per-category accuracy reported; fault injection confirms every below-threshold prediction, abstain, and error defers to the human queue; redaction validated by automated check plus hand-inspected sample with no sensitive fields reaching the model.",
+          "ownerOfRisk": "Delivery team"
+        },
+        {
+          "phase": "Phase 4 — Offline evaluation + red-team",
+          "duration": "~2 weeks (estimate)",
+          "goal": "Measure against the acceptance bar on the frozen set and run targeted adversarial testing for sensitive-data extraction and minority-category misrouting.",
+          "exitCriterion": "≥95% accuracy aggregate and per-category on the frozen 500-doc set at the chosen threshold, with the resulting auto-route rate reported against the agreed minimum useful coverage; red-team findings triaged and added to the development golden set.",
+          "ownerOfRisk": "Delivery team"
+        },
+        {
+          "phase": "Phase 5 — Shadow mode",
+          "duration": "~3–4 weeks (estimate)",
+          "goal": "Run on live intake with humans still deciding; compare silently to surface the gap between the frozen set and the real document mix.",
+          "exitCriterion": "Live per-category agreement holds at the acceptance bar over the shadow window with no deferral-integrity breach and no PII-leak-check failure; failure taxonomy populated from real traffic; rollback trigger and its threshold signed off.",
+          "ownerOfRisk": "AP process owner with delivery team"
+        },
+        {
+          "phase": "Phase 6 — Limited release then full rollout",
+          "duration": "~4+ weeks (estimate)",
+          "goal": "Auto-route a bounded subset with spot-check sampled review, then expand only while the bar holds.",
+          "exitCriterion": "Acceptance bar sustained on live auto-routed traffic under sampled review, per-category, across the full rollout scope; correction feedback loop demonstrably feeding the golden set; rollback exercised at least once as a drill.",
+          "ownerOfRisk": "AP process owner"
+        }
+      ],
+      "assumptions": [
+        "All durations stated are estimates only and will shift with the outcome of the Phase 1 label audit; Phase 1 is expected to dominate given the weak data-readiness score.",
+        "The ~1 FTE current-cost figure is carried from the grounding as an explicitly unvalidated anchor and must be validated in Phase 0 before it is used in any business case.",
+        "We assume AP subject-matter expert time can be committed for blind re-labelling and disagreement adjudication; without it the frozen set cannot be built to a defensible standard.",
+        "We assume the in-scope category set is fixed and enumerable, and that each category has enough historical volume for per-category accuracy to be measurable; sparse categories may need merging or permanent human routing.",
+        "We assume read-only least-privilege access to the AP inbox and drive can be granted via a service account, and that retention rules for vendor bank details permit storing normalised text and audit logs under defined windows.",
+        "We assume redaction of sensitive fields does not remove the signal needed to distinguish categories; this is to be tested in Phase 1, not presumed.",
+        "No latency, accuracy, throughput, or cost figures beyond the stated acceptance bar are asserted; per-document cost is to be measured in Phase 2, and OCR is expected to be a significant cost component for scanned documents (an expectation to validate, not a figure).",
+        "Retrieval/vector indexing is assumed out of scope for the first build and revisited only if evaluation shows knowledge-gap failures rather than definitional ambiguity."
+      ],
+      "refineGate": {
+        "conditions": [
+          "Frozen 500-document held-out set exists with SME-adjudicated labels, disagreements resolved, and sufficient instances per in-scope category for per-category accuracy to be meaningful.",
+          "Inter-annotator agreement among AP subject-matter experts is measured and leaves headroom above the ≥95% per-category bar — or the bar is formally restated by the owner with the new figure documented.",
+          "Folder-label noise rate quantified, so the team knows how far historical filing diverges from adjudicated truth.",
+          "Budget scoped: a per-document processing cost estimate across the mixed-format intake (including OCR for scans) compared against a validated effort baseline, with an approved envelope.",
+          "A minimum useful auto-route rate agreed with the AP owner alongside the accuracy bar, so coverage cannot be traded away to hit accuracy.",
+          "Read-only least-privilege access granted, and retention obligations for vendor bank details confirmed as satisfiable for model inputs, outputs, and logs — including any third-party inference provider's data-retention terms.",
+          "A named AP subject-matter expert committed with authority to adjudicate category disputes.",
+          "Redaction validated as not removing the signal required for category discrimination."
+        ],
+        "noGoConditions": [
+          "Inter-annotator agreement among AP SMEs sits at or below ~95% per category and the owner will not restate the bar — the target is then unmeasurable and the project cannot be evaluated honestly.",
+          "Historical folder labels prove too noisy to adjudicate into a trustworthy 500-document set within the Phase 1 window, and no alternative label source exists.",
+          "Per-document processing cost at projected volume approaches or exceeds the validated cost of the current manual process.",
+          "No AP subject-matter expert can be committed to labelling and adjudication.",
+          "Retention or data-protection obligations on vendor bank details cannot be satisfied by any viable inference and logging arrangement.",
+          "Redaction of sensitive fields removes the signal needed to distinguish categories, and unmasking is not acceptable to the data-protection reviewer.",
+          "The achievable auto-route rate at the accuracy bar is so low that the human queue absorbs nearly all volume, leaving no material relief to the AP team.",
+          "Phase 5 shadow mode shows live per-category accuracy materially below the frozen-set result with no identified, fixable cause — stop rather than loosen the bar."
+        ]
+      }
+    },
+    "audit": {
+      "schemaVersion": "1",
+      "fabricationScan": [
+        {
+          "quote": "~1–2 weeks (estimate)",
+          "verdict": "ok"
+        },
+        {
+          "quote": "Inter-annotator agreement among AP SMEs sits at or below ~95% per category and the owner will not restate the bar",
+          "verdict": "must-label"
+        },
+        {
+          "quote": "OCR is often the larger line item for scanned documents, an expectation to validate rather than a figure to assert",
+          "verdict": "ok"
+        },
+        {
+          "quote": "`{category: enum, confidence: number, evidence_snippet: string, abstain: bool}`",
+          "verdict": "ok"
+        },
+        {
+          "quote": "temperature at the low end",
+          "verdict": "ok"
+        },
+        {
+          "quote": "category schema lock — with the AP team, write a one-paragraph definition and 2–3 worked examples per category",
+          "verdict": "ok"
+        }
+      ],
+      "consistencyIssues": [
+        "The grounding's dataAccess explicitly prescribes 'document store → ingestion pipeline → vector index (embeddings) with metadata filters. Sync on the source's update cadence'; the plan declares retrieval 'out of scope for the first build'. This is defensible for a classifier but is a deviation from grounded guidance that is asserted rather than reconciled with the 'mark result freshness' requirement.",
+        "Phase 3's exit criterion requires 'no sensitive fields reaching the model', while governance says the classifier 'is designed to work from document structure and type-level signals' and separately allows escalating an unmasking design decision — the two paths (hard block vs. negotiable unmask) are never resolved into a single rule for Phase 3's gate.",
+        "Model confidence is treated as a reliable gating signal ('a single tunable threshold') but nothing in the plan calibrates self-reported LLM confidence; the acceptance bar's deferral logic depends entirely on that unvalidated number and no calibration step appears in any phase.",
+        "Milestone Phase 6 requires 'rollback exercised at least once as a drill', but the rollback trigger is only 'signed off' at the end of Phase 5, after shadow mode — no rollback path exists during shadow mode itself when live intake is already being processed."
+      ],
+      "verdictIntegrity": {
+        "pass": true,
+        "note": "Plan states verdict REFINE matching grounding, opens with 'it enters the build as REFINE (composite 64)', names both weak spots (dataReadiness 2, unscoped budget), and adds a genuine refineGate with noGo conditions including 'stop rather than loosen the bar'. No drift toward a rosier reading."
+      },
+      "gaps": [
+        {
+          "title": "No confidence calibration plan",
+          "detail": "The entire fail-closed guarantee rests on the 'confidence gate', yet the plan never says how the confidence number is produced or validated. LLM self-reported confidence is frequently miscalibrated. Add a calibration step in Phase 3/4 (reliability curve of confidence vs. observed accuracy on the development set) and choose the threshold from that curve, otherwise 'every below-threshold prediction defers' is a mechanism with no evidence behind it."
+        },
+        {
+          "title": "Frozen-set staleness and re-freeze policy is undefined",
+          "detail": "The plan says the frozen 500-doc set is 'touched only at gates' and separately notes 'new vendors and new document types appear continuously' feeding 'a periodic golden-set refresh'. There is no rule for when the frozen set itself is retired or re-drawn, who authorises it, or how a re-freeze avoids becoming a quiet loosening of the bar."
+        },
+        {
+          "title": "No handling for the mid-flight failure mode: human queue overflow",
+          "detail": "Integration notes warn 'if the queue is unpleasant to work, staff will bypass it', but there is no capacity model or alert for queue depth. If the auto-route rate is low or a drift event spikes abstains, the queue can exceed AP capacity and the practical outcome is unreviewed routing. Define a queue-depth threshold and an escalation/pause behaviour."
+        },
+        {
+          "title": "Batch-vs-realtime reconciliation is asserted, not specified",
+          "detail": "'reconcile these by polling frequently for arrival but processing in batches' gives no batch window, no SLA for how stale a queued document may be, and no owner sign-off that batch latency is acceptable to AP — despite freshness being stated as realtime in the grounding."
+        }
+      ],
+      "acceptanceBarSpine": {
+        "isSpine": true,
+        "evidence": "The bar is quoted verbatim as 'the spine' in the evaluation section and each milestone exit criterion tests a component of it — Phase 1 tests measurability, Phase 3 fault-injects deferral integrity, Phase 4 requires '≥95% accuracy aggregate and per-category on the frozen 500-doc set', Phases 5–6 require it to hold on live traffic."
+      },
+      "overclaims": [
+        "\"every below-threshold prediction, abstain, and error defers to the human queue\" as a Phase 3 exit criterion via fault injection — fault injection can demonstrate the tested failure modes, not that *every* error path defers; the claim should be scoped to the enumerated injected faults plus a default-deny rule."
+      ],
+      "verdict": "SHIP WITH FIXES",
+      "topFixes": [
+        "Add a confidence-calibration step (reliability curve on the development set, threshold chosen from it) before Phase 4 — the fail-closed acceptance bar currently depends on an uncalibrated, unspecified confidence number.",
+        "Resolve the redaction contradiction: Phase 3 demands 'no sensitive fields reaching the model' while governance permits escalating an unmasking design decision. State one binding rule and route the exception through the data-protection reviewer as a documented gate, not a section-level aside.",
+        "Move rollback-trigger definition and a rollback drill to before shadow mode begins (Phase 4 exit), since shadow mode already touches live intake; also define queue-depth limits and a pause behaviour for human-queue overflow."
+      ]
+    },
+    "humanScore": null
+  }
+]

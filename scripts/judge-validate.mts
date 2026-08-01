@@ -15,8 +15,13 @@
  * top up the rated file with real/P1 plans before `check` can pass.
  */
 
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
 import fs from "node:fs";
+
+// override:true so the project's .env wins over an ambient ANTHROPIC_API_KEY in
+// the shell (e.g. a host tool's own key) — otherwise the runner silently calls
+// the API with the wrong key and 401s.
+loadEnv({ override: true });
 import { GOLDEN_CORPUS } from "../src/lib/kickoff/harness";
 import { serializeGrounding } from "../src/lib/kickoff/grounding";
 import { realPlanner, realCritic } from "../src/lib/kickoff/claude";
