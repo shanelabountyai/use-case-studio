@@ -15,10 +15,39 @@ Routed via `provider.getProvider()` — real stages only when `KICKOFF_ENABLED` 
 
 **Measured run (BK-3 requirement)** — `claude-opus-5`, effort medium, invoice-
 classify fixture (REFINE): planner 4.8k in / 9.4k out, critic 14.1k in / 4.4k
-out → **~$0.44/run**, ~33k tokens (well under the 60k cap). Fabrication gate
-5/5 caught (PASS). Latency: planner alone exceeded 120s → timeout default raised
+out → **~$0.44/run**, ~33k tokens (well under the 60k cap). Latency: planner
+alone exceeded 120s → timeout default raised
 to **280s** (fits the worker's 300s maxDuration). Cost/latency levers if needed:
 `KICKOFF_MODEL=claude-sonnet-5` or a lower effort in `claude.ts`.
+
+### Status (2026-08-03): fabrication gate PASSES on both corpus cases
+The earlier "gate 5/5 (PASS)" was scored under logic that could not fail — a
+catch counted if the critic merely returned a non-clean verdict, so a critic
+answering "SHIP WITH FIXES" to everything scored 100% while detecting nothing.
+**Disregard that result.** Scoring now requires the critic to NAME the planted
+text (`99.9%` / `50ms` / "zero errors" / Pinecone), plus a clean-plan control it
+must not condemn — sensitivity and specificity, not just sensitivity.
+
+Re-run live under the strict scoring (`claude-opus-5`, effort medium):
+
+| corpus case | planted | control | result | latency |
+|---|---|---|---|---|
+| policy-lookup (BUILD) | 4/4 named | clean | **PASS** | 61s |
+| invoice-classify (REFINE) | 5/5 named (incl. verdict drift) | clean | **PASS** | 160s |
+
+Two harness defects surfaced and were fixed getting here:
+- `silent-downgrade` was planted on BUILD groundings where the mutation is a
+  no-op (planted plan byte-identical to the control), demanding the critic catch
+  a fabrication that wasn't there. Now planted only where the drift is real.
+- `basePlan` hardcoded RAG prose for every grounding while taking
+  `architecturePattern` from the grounding, so the classify control described
+  retrieval for a classification task. The live critic correctly condemned it —
+  a true positive that read as a false one. The body now follows `taskShape`.
+
+Re-run the gate after any prompt edit (`PROMPT_ROSTER_VERSION` bump):
+`env -u ANTHROPIC_API_KEY BK_LIVE=1 npx vitest run src/lib/kickoff/gate.live.test.ts`
+(the `env -u` matters — dotenv does not override an exported shell key; a stale
+one shadows `.env` and 401s). ~$2/run, ~4 min.
 
 **BK-7 LLM-judge (2026-07-31):** `judge.ts` — `judgePlan` scores a plan 1–5 on
 groundedness/actionability/barAlignment/honesty/overall; `judgeAgreement` +

@@ -4,6 +4,7 @@ import {
   deterministicRedTeam,
   plantedFabrications,
   criticFabricationGate,
+  basePlan,
   GOLDEN_CORPUS,
 } from "./harness";
 import { serializeGrounding } from "./grounding";
@@ -11,7 +12,7 @@ import { stubPlanner, stubCritic } from "./provider";
 import { CASE_POLICY_LOOKUP, CASE_INVOICE_CLASSIFY } from "./fixtures";
 import type { CriticAudit } from "./contracts";
 import type { Critic } from "./provider";
-import { planText } from "./invariants";
+import { planText, checkPlanInvariants } from "./invariants";
 
 const g = serializeGrounding("00000000-0000-4000-8000-0000000000c0", CASE_POLICY_LOOKUP); // BUILD
 const gRefine = serializeGrounding("00000000-0000-4000-8000-0000000000c1", CASE_INVOICE_CLASSIFY); // REFINE
@@ -53,6 +54,28 @@ describe("planted-fabrication red-team (deterministic half)", () => {
     expect(plantedFabrications(g).map((f) => f.kind)).not.toContain("silent-downgrade");
     // REFINE grounding: the drift is real, so it must be planted.
     expect(plantedFabrications(gRefine).map((f) => f.kind)).toContain("silent-downgrade");
+  });
+});
+
+describe("clean base plan (the gate's control)", () => {
+  // The control must be honest for ITS OWN grounding, not just free of planted
+  // lies. A RAG-shaped plan handed to the classify case is inconsistent on its
+  // face, and the live critic condemned it — which failed the gate as a false
+  // positive. This pins the fix offline so it can't regress on the next run.
+  for (const [label, gr] of [["lookup/BUILD", g], ["classify/REFINE", gRefine]] as const) {
+    it(`passes every structural invariant: ${label}`, () => {
+      const failures = checkPlanInvariants(basePlan(gr), null, gr)
+        .filter((r) => r.name !== "critic-verdict-wellformed") // needs an audit
+        .filter((r) => !r.pass);
+      expect(failures.map((f) => `${f.name}: ${f.detail}`)).toEqual([]);
+    });
+  }
+
+  it("describes the architecture it declares, per task shape", () => {
+    expect(basePlan(g).sections.architecture.markdown).toMatch(/retrieval/i);
+    // The classify case must NOT describe retrieval — that was the defect.
+    expect(basePlan(gRefine).sections.architecture.markdown).toMatch(/structured output/i);
+    expect(basePlan(gRefine).sections.architecture.markdown).not.toMatch(/\bretrieval\b(?! layer)/i);
   });
 });
 

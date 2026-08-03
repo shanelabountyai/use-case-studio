@@ -103,24 +103,83 @@ export async function runCorpus(deps: { planner: Planner; critic: Critic }): Pro
 
 /* ── Planted-fabrication red-team ── */
 
-function basePlan(g: GroundingInput): IntegratedPlan {
+/* The base plan doubles as the fabrication gate's CLEAN CONTROL, so it has to be
+   genuinely honest for its own grounding — not merely free of planted lies. It
+   used to hardcode RAG prose for every case while taking architecturePattern
+   from the grounding, so on the classify case it described retrieval for a
+   classification task. The live critic correctly condemned that as inconsistent,
+   which read as a false positive and failed the gate. The plan body now follows
+   the task shape. */
+
+/** Evaluation prose per task shape — also what the `eval-vocabulary` invariant
+ *  looks for, so every shape the corpus can produce stays covered. */
+const SHAPE_EVAL: Record<string, string> = {
+  lookup: "Golden set of authored questions scored for correct-with-citation; low-confidence queries refuse rather than answer.",
+  classify: "Per-category recall and a confusion matrix over a frozen held-out set; a calibrated confidence threshold defers low-confidence items to a human queue.",
+  actions: "Action-safety suite: permission scoping per tool, prompt-injection probes, and a rollback path for every write.",
+  process: "Stage checks at each step plus an end-to-end integration run over recorded cases.",
+  generate: "Rubric scoring with an LLM-as-judge, validated against human ratings before it is trusted.",
+};
+
+/** Shape-specific body. Only the shapes the golden corpus actually produces are
+ *  spelled out; anything else gets the architecture-neutral default. */
+const SHAPE_BODY: Record<string, { summary: string; architecture: string; dataPipeline: string; governance: string; flow: { name: string; steps: string[] }; goal: string }> = {
+  lookup: {
+    summary: "Retrieval-grounded answering over the existing corpus, with citations and an explicit refusal path.",
+    architecture: "Grounded retrieval with refusal gates over the corpus; answers cite the passages they came from.",
+    dataPipeline: "Ingest, chunk, embed, index; re-index on source change so answers track the current documents.",
+    governance: "Permission-aware retrieval so results respect source access; audit logging of query and cited passages.",
+    flow: { name: "online", steps: ["query", "retrieve", "answer with citations"] },
+    goal: "retrieval MVP over the corpus",
+  },
+  classify: {
+    summary: "Direct prompting with a structured, enumerated label set and a confidence threshold that defers uncertain items to people.",
+    architecture: "Direct prompting with structured output: a fixed label schema plus a confidence score per prediction; no retrieval layer.",
+    dataPipeline: "Assemble a labelled set from the historical folders, hold out a frozen evaluation split, and quarantine noisy labels before training prompts against them.",
+    governance: "Sensitive fields are minimised in prompts and retained per policy; every below-threshold prediction routes to human review rather than auto-routing.",
+    flow: { name: "batch", steps: ["ingest document", "classify with confidence", "route or defer to human"] },
+    goal: "classifier MVP over the held-out split",
+  },
+};
+
+const DEFAULT_BODY = {
+  summary: "An implementation that expands the recommended architecture for this case.",
+  architecture: "Expands the recommended pattern; no capability is assumed beyond what the grounding supports.",
+  dataPipeline: "Assemble the named sources, validate them, and keep an auditable path from input to output.",
+  governance: "Access follows the source systems; decisions and their inputs are logged for review.",
+  flow: { name: "primary", steps: ["ingest", "process", "return result"] },
+  goal: "MVP against the acceptance bar",
+};
+
+export function basePlan(g: GroundingInput): IntegratedPlan {
   const sec = (heading: string, markdown: string) => ({ heading, markdown });
+  const body = SHAPE_BODY[g.taskShape] ?? DEFAULT_BODY;
+  const evaluation = SHAPE_EVAL[g.taskShape] ?? "Held-out evaluation set scored against the acceptance bar before launch.";
   return {
     schemaVersion: "1",
     verdict: g.verdict,
     taskShape: g.taskShape,
     architecturePattern: g.recommendation.architecturePattern,
-    executiveSummary: "Base plan.",
+    executiveSummary: body.summary,
     sections: {
-      architecture: sec("Architecture", "Grounded retrieval with refusal gates over the corpus."),
-      dataPipeline: sec("Data pipeline", "Ingest, chunk, embed, index."),
-      evaluation: sec("Evaluation", "Golden set with citation-correctness; refusal on low confidence."),
-      governance: sec("Governance", "Permission-aware retrieval; audit logging."),
-      delivery: sec("Delivery", "Eval-first quarter; durations are estimates."),
+      architecture: sec("Architecture", body.architecture),
+      dataPipeline: sec("Data pipeline", body.dataPipeline),
+      evaluation: sec("Evaluation", evaluation),
+      governance: sec("Governance", body.governance),
+      delivery: sec("Delivery", "Eval-first: build the measurement before the feature. Durations below are estimates."),
     },
-    dataFlows: [{ name: "online", steps: ["query", "retrieve", "answer"] }],
-    milestones: [{ phase: "P1", goal: "retrieval MVP", exitCriterion: "golden set holds", duration: "~2 weeks (estimate)" }],
-    assumptions: ["English corpus (estimate)"],
+    dataFlows: [body.flow],
+    milestones: [
+      {
+        phase: "P1",
+        goal: body.goal,
+        // The acceptance bar verbatim — it is the spine, and its own numbers are
+        // legitimate targets rather than fabricated metrics.
+        exitCriterion: `meets the acceptance bar: ${g.acceptanceBar}`,
+        duration: "~2 weeks (estimate)",
+      },
+    ],
+    assumptions: ["Durations are estimates, not commitments"],
     refineGate: g.verdict === "REFINE" ? { conditions: ["resolve weak dim"], noGoConditions: ["bar unreachable → stop"] } : null,
   };
 }
