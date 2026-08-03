@@ -20,6 +20,35 @@ alone exceeded 120s → timeout default raised
 to **280s** (fits the worker's 300s maxDuration). Cost/latency levers if needed:
 `KICKOFF_MODEL=claude-sonnet-5` or a lower effort in `claude.ts`.
 
+### Measured run — policy-lookup (BUILD), 2026-08-03
+The outstanding half of the BK-3 cap numbers (`claude-opus-5`, effort medium):
+
+| stage | in | out | latency |
+|---|---|---|---|
+| planner | 4,641 | 8,440 | 121.1s |
+| critic | 12,997 | 3,018 | 40.3s |
+| **total** | **29,096 tokens** | | **161.4s** |
+
+**~$0.37/run**, vs ~$0.44 for invoice-classify (REFINE). Both sit at roughly
+half the 60k token cap and inside the 280s timeout, so **the caps stand as set**
+— no change needed. Critic verdict: SHIP WITH FIXES. Note the planner alone took
+121s, well past Hobby's 60s function cap (see the go-live checklist).
+
+**Open defect — `no-guarantees` invariant is over-broad.** The live plan failed
+it on *"audience-restricted content filters can be enforced if any exist"* —
+correctly-hedged engineering prose, not an overclaim. The regex lists `enforced`,
+`ensure[sd]?`, and `prevents?` alongside real overclaim phrases, and those are
+ordinary security verbs ("access controls are enforced at the retrieval layer").
+An earlier run failed on `guarantee`/`guaranteed`, context not captured.
+
+This blocks the launch gate's "run-success ≥95% on the corpus" criterion: if the
+invariant fires on honest plans, no real run passes, and the check trains people
+to ignore it. Proposed fix — keep unambiguous overclaims standalone (`guarantee*`,
+"never fails", "100% accurate", "zero errors") but require an absolute quantifier
+immediately after the softer verbs (`prevents any`, `ensures no`, `enforces all`).
+The planted `guarantee` fabrication still trips on "guarantees zero errors …
+prevents any leakage". **Not applied — it is a product-standards call.**
+
 ### Status (2026-08-03): fabrication gate PASSES on both corpus cases
 The earlier "gate 5/5 (PASS)" was scored under logic that could not fail — a
 catch counted if the critic merely returned a non-clean verdict, so a critic
