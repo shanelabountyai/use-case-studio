@@ -38,6 +38,24 @@ describe("detectors", () => {
     expect(flagGuarantees("This guarantees zero errors and prevents leakage.").length).toBeGreaterThan(0);
     expect(flagGuarantees("This aims to reduce errors.")).toHaveLength(0);
   });
+
+  it("flags absolute-scoped claims but not ordinary engineering verbs", () => {
+    // Overclaims: the verb is bound to an absolute scope.
+    expect(flagGuarantees("It prevents any leakage.").length).toBeGreaterThan(0);
+    expect(flagGuarantees("This ensures no errors reach the user.").length).toBeGreaterThan(0);
+
+    // Honest prose. The live planner wrote the first of these and the old
+    // single-list regex failed the whole plan on it.
+    expect(flagGuarantees("Audience-restricted content filters can be enforced if any exist.")).toHaveLength(0);
+    expect(flagGuarantees("Access controls are enforced at the retrieval layer.")).toHaveLength(0);
+    expect(flagGuarantees("Ensure the index is rebuilt when a source changes.")).toHaveLength(0);
+    expect(flagGuarantees("A confidence threshold prevents low-confidence auto-routing.")).toHaveLength(0);
+  });
+
+  it("still catches the planted guarantee fabrication", () => {
+    const planted = "This design guarantees zero errors and prevents any leakage.";
+    expect(flagGuarantees(planted).length).toBeGreaterThan(0);
+  });
 });
 
 describe("checkPlanInvariants", () => {

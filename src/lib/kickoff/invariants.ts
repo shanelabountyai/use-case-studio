@@ -35,8 +35,25 @@ export function planText(p: IntegratedPlan): string {
   return [p.executiveSummary, ...sections, ...flows, ...miles, ...p.assumptions].join("\n");
 }
 
-const GUARANTEE =
-  /\b(guarantee[sd]?|guaranteeing|ensure[sd]?|enforced|prevents?|prevented|never fails?|100%\s+accurate|zero\s+errors?)\b/i;
+/* Overclaim detection, in two tiers.
+
+   The single-list version of this flagged `enforced`, `ensure`, and `prevents`
+   on sight, which failed a live plan on "audience-restricted content filters can
+   be enforced if any exist" — correctly-hedged engineering prose. Those are
+   ordinary security verbs ("access controls are enforced at the retrieval
+   layer"), and an invariant that fires on honest plans means no real run passes
+   the launch gate, which teaches people to ignore the check. */
+
+/** Unambiguous overclaims: these are claims however they are phrased.
+ *  ponytail: no negation handling, so "we cannot guarantee X" still trips. It
+ *  reads as a false positive but an honest plan rarely needs the word at all;
+ *  add negation lookbehind if real runs show it recurring. */
+const ABSOLUTE_CLAIM = /\b(guarantee[sd]?|guaranteeing|never fails?|100%\s+accurate|zero\s+errors?)\b/i;
+
+/** Softer verbs only read as an overclaim when bound to an absolute scope. The
+ *  quantifier must follow immediately, so "prevents any leakage" trips while
+ *  "enforced if any exist" does not. */
+const SCOPED_CLAIM = /\b(ensur\w*|prevent\w*|enforc\w*)\s+(all|any|every|no|zero|100%)\b/i;
 
 // A performance/cost/latency metric token: a percentage, a dollar figure, or a
 // millisecond figure. Standalone plain integers are intentionally NOT matched —
@@ -55,7 +72,8 @@ function barMetrics(bar: string): string[] {
 /** Guarantee-language hits (must be zero). */
 export function flagGuarantees(text: string): string[] {
   const hits: string[] = [];
-  for (const m of text.matchAll(new RegExp(GUARANTEE, "gi"))) hits.push(m[0]);
+  for (const re of [ABSOLUTE_CLAIM, SCOPED_CLAIM])
+    for (const m of text.matchAll(new RegExp(re.source, "gi"))) hits.push(m[0]);
   return hits;
 }
 
