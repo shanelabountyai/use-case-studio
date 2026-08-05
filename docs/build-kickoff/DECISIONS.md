@@ -34,7 +34,7 @@ half the 60k token cap and inside the 280s timeout, so **the caps stand as set**
 — no change needed. Critic verdict: SHIP WITH FIXES. Note the planner alone took
 121s, well past Hobby's 60s function cap (see the go-live checklist).
 
-**Open defect — `no-guarantees` invariant is over-broad.** The live plan failed
+**FIXED 2026-08-04 — `no-guarantees` was over-broad.** The live plan failed
 it on *"audience-restricted content filters can be enforced if any exist"* —
 correctly-hedged engineering prose, not an overclaim. The regex lists `enforced`,
 `ensure[sd]?`, and `prevents?` alongside real overclaim phrases, and those are
@@ -47,7 +47,20 @@ to ignore it. Proposed fix — keep unambiguous overclaims standalone (`guarante
 "never fails", "100% accurate", "zero errors") but require an absolute quantifier
 immediately after the softer verbs (`prevents any`, `ensures no`, `enforces all`).
 The planted `guarantee` fabrication still trips on "guarantees zero errors …
-prevents any leakage". **Not applied — it is a product-standards call.**
+prevents any leakage".
+
+Applied, and re-run live — **all six invariants PASS on a real plan**
+(28,214 tokens, $0.371, 171.1s; planner 4,641/7,496, critic 12,077/4,000).
+
+Two caveats on that green:
+- **One passing run is not the "≥95% run-success" criterion.** Planner output
+  varies run to run (8,440 vs 7,496 output tokens on consecutive runs of the
+  same fixture), so the criterion needs repeated runs across both plan cases,
+  not this single sample.
+- `guarantee*` remains a standalone trip, deliberately. If the planner writes
+  honest hedging ("we cannot guarantee X") it will still fail. Not yet observed;
+  the earlier `guarantee`/`guaranteed` failure was never diagnosed because the
+  artifact predated `BK_ARTIFACT_DIR`. Add negation handling if it recurs.
 
 ### Status (2026-08-03): fabrication gate PASSES on both corpus cases
 The earlier "gate 5/5 (PASS)" was scored under logic that could not fail — a
