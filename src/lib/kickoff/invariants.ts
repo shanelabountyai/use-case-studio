@@ -44,24 +44,31 @@ export function planText(p: IntegratedPlan): string {
    layer"), and an invariant that fires on honest plans means no real run passes
    the launch gate, which teaches people to ignore the check. */
 
-/** Unambiguous overclaims: these are claims however they are phrased.
- *  ponytail: no negation handling, so "we cannot guarantee X" still trips. It
- *  reads as a false positive but an honest plan rarely needs the word at all;
- *  add negation lookbehind if real runs show it recurring. */
-const ABSOLUTE_CLAIM = /\b(guarantee[sd]?|guaranteeing|never fails?|100%\s+accurate|zero\s+errors?)\b/i;
+/** Unambiguous overclaims: claims however they are phrased. "guarantee" is NOT
+ *  here — live plans use it honestly all the time ("no guarantee is implied",
+ *  "rather than a guaranteed run rate", "a documented deferral guarantee"), so
+ *  it's treated as scoped below (only a claim when it guarantees an absolute
+ *  outcome). "zero errors"/"100% accurate"/"never fails" remain unambiguous. */
+const ABSOLUTE_CLAIM = /\b(never fails?|100%\s+accurate|zero\s+errors?)\b/i;
 
-/** Softer verbs only read as an overclaim when bound to an absolute scope. The
- *  quantifier must follow immediately, so "prevents any leakage" trips while
- *  "enforced if any exist" does not. */
-const SCOPED_CLAIM = /\b(ensur\w*|prevent\w*|enforc\w*)\s+(all|any|every|no|zero|100%)\b/i;
+/** Softer/scoped verbs only read as an overclaim when bound to an absolute scope.
+ *  The quantifier must follow immediately, so "guarantees zero errors" and
+ *  "prevents any leakage" trip, while "a deferral guarantee" and "enforced if
+ *  any exist" do not. */
+const SCOPED_CLAIM = /\b(ensur\w*|prevent\w*|enforc\w*|guarantee\w*)\s+(all|any|every|no|zero|100%)\b/i;
 
 // A performance/cost/latency metric token: a percentage, a dollar figure, or a
 // millisecond figure. Standalone plain integers are intentionally NOT matched —
 // too noisy (counts, versions, week numbers).
 const METRIC = /\d+(?:\.\d+)?\s?%|\$\s?\d[\d,]*(?:\.\d+)?|\d+\s?ms\b/gi;
 
-// Words that make a number a declared estimate/example rather than a claim.
-const LABEL = /estimate|example|e\.g\.|illustrative|approx|~|target|acceptance bar|golden set|held-out/i;
+// Framing that makes a metric a target/estimate/analysis rather than a claimed
+// achieved benchmark. Broadened after a live run flagged "defers 40% of
+// documents" — honest analytical prose. Proportions ("X% of …") are handled
+// structurally in flagUnlabeledMetrics; these are the lexical hedges/targets.
+// Deliberately excludes over-common words (about/around/rate) that could
+// coincidentally sit next to a real fabrication.
+const LABEL = /estimate|example|e\.g\.|illustrative|approx|~|target|acceptance bar|golden set|held-out|roughly|approximately|per[- ]category|threshold|budget|baseline|improvement|reduction|deferral|defer/i;
 
 /** Numeric tokens drawn from the case's acceptance bar — these are legitimate
  *  targets, never fabrications, so the plan may echo them freely. */
@@ -69,11 +76,23 @@ function barMetrics(bar: string): string[] {
   return (bar.match(METRIC) ?? []).map((s) => s.replace(/\s+/g, ""));
 }
 
-/** Guarantee-language hits (must be zero). */
+// Negation/disclaimer words that turn an overclaim into an honest hedge ("no
+// guarantee is implied", "we cannot guarantee X"). Excludes "never" — "never
+// fails" is itself a claim, not a negation.
+const NEGATION = /\b(no|not|without|cannot|can't|cant|don't|dont|doesn't|doesnt|isn't|isnt|aren't|arent|won't|wont|neither|nor|avoid)\b/i;
+
+/** Guarantee-language hits (must be zero). A match is spared when negated in its
+ *  OWN clause — scoped to the text since the last `.`/`;` so a negation in an
+ *  earlier clause ("no risk; the system guarantees…") doesn't wrongly spare it. */
 export function flagGuarantees(text: string): string[] {
   const hits: string[] = [];
   for (const re of [ABSOLUTE_CLAIM, SCOPED_CLAIM])
-    for (const m of text.matchAll(new RegExp(re.source, "gi"))) hits.push(m[0]);
+    for (const m of text.matchAll(new RegExp(re.source, "gi"))) {
+      const i = m.index ?? 0;
+      const clause = text.slice(Math.max(0, i - 60), i).split(/[.;]/).pop() ?? "";
+      if (NEGATION.test(clause)) continue;
+      hits.push(m[0]);
+    }
   return hits;
 }
 
@@ -86,6 +105,9 @@ export function flagUnlabeledMetrics(text: string, allowed: string[]): string[] 
     const tok = m[0].replace(/\s+/g, "");
     if (allow.has(tok)) continue;
     const i = m.index ?? 0;
+    // "X% of <noun>" is a proportion (honest analysis: "defers 40% of docs"),
+    // not a fabricated achieved benchmark — exempt it structurally.
+    if (/^\s*of\b/i.test(text.slice(i + m[0].length, i + m[0].length + 6))) continue;
     const window = text.slice(Math.max(0, i - 40), i + m[0].length + 40);
     if (!LABEL.test(window)) out.push(m[0]);
   }

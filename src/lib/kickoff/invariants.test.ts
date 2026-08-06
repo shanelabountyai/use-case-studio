@@ -34,9 +34,39 @@ describe("detectors", () => {
     expect(flagUnlabeledMetrics("Exit: 90% correct-with-citation.", ["90%"])).toHaveLength(0);
   });
 
+  it("still flags the planted fabrications (regression guard for the live gate)", () => {
+    expect(flagUnlabeledMetrics("Achieves 99.9% accuracy on all queries.", [])).toContain("99.9%");
+    expect(flagUnlabeledMetrics("Responds in <50ms under all load.", [])).toContain("50ms");
+  });
+
+  it("spares honest proportions and target/estimate framing (over-broad-metric fix)", () => {
+    // Proportion — the live false positive: "defers 40% of documents".
+    expect(flagUnlabeledMetrics("A classifier that defers 40% of documents.", [])).toHaveLength(0);
+    expect(flagUnlabeledMetrics("Roughly 30% of cases need review.", [])).toHaveLength(0);
+    // Target / analysis framing.
+    expect(flagUnlabeledMetrics("Aim for 90% per-category recall.", [])).toHaveLength(0);
+    expect(flagUnlabeledMetrics("A 10% improvement in throughput.", [])).toHaveLength(0);
+  });
+
   it("flags guarantee language", () => {
     expect(flagGuarantees("This guarantees zero errors and prevents leakage.").length).toBeGreaterThan(0);
     expect(flagGuarantees("This aims to reduce errors.")).toHaveLength(0);
+  });
+
+  it("spares negated/disclaimed guarantees but not across a clause boundary", () => {
+    // The live false positive: an explicit disclaimer.
+    expect(flagGuarantees("No real-time routing guarantee is implied.")).toHaveLength(0);
+    expect(flagGuarantees("We cannot guarantee zero downtime.")).toHaveLength(0);
+    // A negation in an EARLIER clause must not spare a real claim in a later one.
+    expect(flagGuarantees("There is no risk; the system guarantees zero errors.").length).toBeGreaterThan(0);
+  });
+
+  it("treats 'guarantee' as scoped — honest noun/contrastive uses pass, absolute-outcome guarantees flag", () => {
+    // The two live false positives.
+    expect(flagGuarantees("These are estimates rather than a guaranteed run rate.")).toHaveLength(0);
+    expect(flagGuarantees("Governance includes a documented deferral guarantee.")).toHaveLength(0);
+    // Still catches a guarantee bound to an absolute outcome.
+    expect(flagGuarantees("The design guarantees zero errors.").length).toBeGreaterThan(0);
   });
 
   it("flags absolute-scoped claims but not ordinary engineering verbs", () => {
