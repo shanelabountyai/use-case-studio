@@ -6,6 +6,7 @@ import { C, MONO, btn, inputStyle } from "../theme";
 import { Eyebrow, Field, PanelShell, TextIn } from "./atoms";
 import { SaveBar, type StoreStatus } from "./panels";
 import { DeliverSections } from "./DeliverSections";
+import { KickoffPanel } from "./KickoffPanel";
 
 const COMMERCIAL_MODELS = ["Fixed fee", "Time & materials", "Retainer"];
 
@@ -102,6 +103,12 @@ export function DeliverStage({ uc, ev, engagement, setEngagement, currentId, sto
             </Field>
           </div>
         </PanelShell>
+
+        {/* Practitioner-only: never printed, never in the shared client brief. */}
+        <KickoffPanel
+          ev={ev} currentId={currentId} caseName={uc.name || "AI use case"}
+          onDownload={onDownload} onCopy={onCopy} safeFile={safeFile}
+        />
       </div>
 
       <DeliverSections uc={uc} engagement={engagement} />
