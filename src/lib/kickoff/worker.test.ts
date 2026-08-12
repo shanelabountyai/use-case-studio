@@ -54,6 +54,9 @@ describe("executeJob — state machine (LLM stages injected)", () => {
     expect(out.laneStatus.planner).toBe("failed");
     expect(out.audit).toBeNull();
     expect(critic).not.toHaveBeenCalled();
+    // The cause must survive onto the note — a bare "planner stage failed" is
+    // undebuggable from the UI, which is how the first live run dead-ended.
+    expect(out.note).toContain("boom");
   });
 
   it("critic failure → partial, plan kept but non-approvable (no audit)", async () => {

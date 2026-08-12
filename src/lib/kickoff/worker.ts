@@ -61,6 +61,14 @@ export async function executeJob(
   return raceTimeout(runPipeline(caseId, uc, serverVerdict, deps, limits), limits.timeoutMs, timedOut);
 }
 
+/* Both stage catches used to swallow the error whole, which made a failed run a
+   dead end: the note said "planner stage failed" and nothing reached the logs.
+   Keep the cause on the note (owner-only surface) and log the full error. */
+const reason = (e: unknown): string => {
+  const m = e instanceof Error ? e.message : String(e);
+  return m.length > 200 ? `${m.slice(0, 200)}…` : m;
+};
+
 async function runPipeline(
   caseId: string,
   uc: UseCase,
@@ -82,9 +90,10 @@ async function runPipeline(
     inputTokens += r.inputTokens;
     outputTokens += r.outputTokens;
     laneStatus.planner = "ok";
-  } catch {
+  } catch (e) {
+    console.error("[kickoff] planner stage failed", e);
     laneStatus.planner = "failed";
-    return { status: "partial", plan: null, audit: null, laneStatus, cost: null, note: "planner stage failed" };
+    return { status: "partial", plan: null, audit: null, laneStatus, cost: null, note: `planner stage failed: ${reason(e)}` };
   }
 
   // Integrity: the planner echoes a verdict; the server's re-derived verdict wins.
@@ -115,10 +124,11 @@ async function runPipeline(
       cost: { inputTokens, outputTokens, usd: priceUsd(kickoffModel(), inputTokens, outputTokens) },
       note: null,
     };
-  } catch {
+  } catch (e) {
+    console.error("[kickoff] critic stage failed", e);
     laneStatus.critic = "failed";
     // A plan without an audit is non-approvable → partial, never complete.
-    return { status: "partial", plan, audit: null, laneStatus, cost: { inputTokens, outputTokens, usd: priceUsd(kickoffModel(), inputTokens, outputTokens) }, note: "critic stage failed" };
+    return { status: "partial", plan, audit: null, laneStatus, cost: { inputTokens, outputTokens, usd: priceUsd(kickoffModel(), inputTokens, outputTokens) }, note: `critic stage failed: ${reason(e)}` };
   }
 }
 
