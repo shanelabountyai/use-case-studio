@@ -1,10 +1,17 @@
-# When ready to turn on Build Kickoff
+# Build Kickoff — LIVE as of 2026-08-12
 
-The Build Kickoff feature is **fully built, verified, and currently dark** (off).
-While dark it runs nothing and costs nothing. This file is the whole path from
-dark → live. Full engineering detail lives in `docs/build-kickoff/DECISIONS.md`.
+The go-live checklist below is **done**. Kept as a record of what was required.
+Full engineering detail lives in `docs/build-kickoff/DECISIONS.md`.
 
-_Last verified: 2026-08-06 — both live launch gates pass; dev + prod DBs migrated._
+_Live since 2026-08-12: Vercel Pro, every-minute cron, all three prod env vars
+set, prod DB migrated. Worker verified returning 200 on a manual cron trigger._
+
+> **Prod and local use different Neon databases.** Local `.env` points at
+> `ep-plain-star-…`; production at `ep-restless-shape-…`. A `db:migrate` run
+> locally does **not** touch prod — prod sat on migration `0000` while local was
+> at `0003`, and the worker 500'd on the missing `build_kickoff_plan` table.
+> After adding a migration, run it against prod too (prod `DATABASE_URL` is
+> stored Sensitive in Vercel, so grab the string from the Neon console).
 
 ---
 
@@ -14,34 +21,35 @@ build plan — architecture, data pipeline, evaluation, governance, delivery
 milestones — then a second AI critic audits it for fabricated benchmarks, fake
 guarantees, and vendor lock-in before you see it. ~3 min, ~$0.40 per plan.
 
-## Current state (dark)
-- `KICKOFF_ENABLED` unset → feature invisible, no runtime, no cost.
-- `vercel.json` cron is **daily** (`0 0 * * *`) so deploys stay green on Vercel Hobby.
+## Current state (live)
+- `KICKOFF_ENABLED=true` in Vercel Production and local `.env`.
+- `vercel.json` cron is **every minute** (`* * * * *`), commit `7933d88`.
 - Runtime pipeline = planner + critic (both live gates verified). The LLM-judge is
-  an eval/QA tool only — NOT in the runtime path, so it does not block go-live.
+  an eval/QA tool only — NOT in the runtime path.
 
 ---
 
-## Go-live checklist (in order)
+## Go-live checklist (all done 2026-08-12)
 
-1. **Vercel → Pro plan.** Required: the worker declares `maxDuration = 300` and the
+1. ✅ **Vercel → Pro plan.** Required: the worker declares `maxDuration = 300` and the
    Opus-5 planner takes 2–3 min. Hobby caps functions at 60s and would kill every
    run mid-planner.
 
-2. **Vercel env vars** (Settings → Environment Variables, Production):
+2. ✅ **Vercel env vars** (Settings → Environment Variables, Production):
    - `ANTHROPIC_API_KEY` — the API key (same one in local `.env`). Needs a positive
      **API credit balance** in console.anthropic.com (separate from claude.ai
      usage credits).
    - `CRON_SECRET` — must match the value in your local `.env`. Vercel sends it as
      the cron's `Authorization: Bearer …`; the worker rejects the cron without it.
 
-3. **Cron → every-minute.** Change `vercel.json` to `"schedule": "* * * * *"` so a
-   queued job drains within a minute instead of waiting up to 24h. **Do this only
-   after step 1** — every-minute crons need Pro. (One-line change; ask Claude Code
-   to make it.)
+3. ✅ **Cron → every-minute.** `vercel.json` at `"schedule": "* * * * *"` so a
+   queued job drains within a minute instead of waiting up to 24h. Needs Pro.
 
-4. **`KICKOFF_ENABLED=true`** — in Vercel (prod) and local `.env`. This is the
-   actual on-switch.
+4. ✅ **`KICKOFF_ENABLED=true`** — in Vercel (prod) and local `.env`. The on-switch.
+
+5. ✅ **Migrate the prod DB** (missing from the original checklist — see the warning
+   at the top). Verify with `vercel crons run /api/kickoff/worker`, then check
+   `vercel logs <prod-url> --json` shows a 200, not a 500.
 
 ---
 
