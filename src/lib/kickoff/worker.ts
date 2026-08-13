@@ -215,7 +215,12 @@ export async function claimNextJob(): Promise<typeof buildKickoffPlans.$inferSel
   return claimed ?? null;
 }
 
-export async function finishJob(id: string, outcome: JobOutcome, latencyMs?: number): Promise<void> {
+export async function finishJob(
+  id: string,
+  outcome: JobOutcome,
+  latencyMs?: number,
+  provenance?: Provenance,
+): Promise<void> {
   await db
     .update(buildKickoffPlans)
     .set({
@@ -227,6 +232,7 @@ export async function finishJob(id: string, outcome: JobOutcome, latencyMs?: num
       latencyMs: latencyMs ?? null,
       note: outcome.note,
       leaseUntil: null,
+      ...(provenance ? { provenance } : {}),
     })
     .where(eq(buildKickoffPlans.id, id));
 }

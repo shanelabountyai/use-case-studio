@@ -9,6 +9,7 @@
 import type { GroundingInput, IntegratedPlan, CriticAudit } from "./contracts";
 import { kickoffEnabled } from "./flags";
 import { realPlanner, realCritic } from "./claude";
+import { kickoffModel } from "./pricing";
 
 export type Planner = (g: GroundingInput) => Promise<{ plan: IntegratedPlan; inputTokens: number; outputTokens: number }>;
 export type Critic = (plan: IntegratedPlan, g: GroundingInput) => Promise<{ audit: CriticAudit; inputTokens: number; outputTokens: number }>;
@@ -48,11 +49,14 @@ export const stubPlanner: Planner = async (g) => ({
 
 /** Route to the real Claude stages only when the feature is enabled AND a key is
  *  present; otherwise the offline stubs (dev/CI, or key not yet configured). The
- *  worker calls this per run, so flipping KICKOFF_ENABLED needs no code change. */
-export function getProvider(): { planner: Planner; critic: Critic } {
+ *  worker calls this per run, so flipping KICKOFF_ENABLED needs no code change.
+ *  `model` reports which one actually ran, for provenance — the worker stamps
+ *  this onto the persisted row after the run (the enqueue-time value in
+ *  route.ts is only ever a placeholder, since nothing has run yet). */
+export function getProvider(): { planner: Planner; critic: Critic; model: string } {
   if (kickoffEnabled() && process.env.ANTHROPIC_API_KEY)
-    return { planner: realPlanner, critic: realCritic };
-  return { planner: stubPlanner, critic: stubCritic };
+    return { planner: realPlanner, critic: realCritic, model: kickoffModel() };
+  return { planner: stubPlanner, critic: stubCritic, model: "stub" };
 }
 
 /** Offline critic stub — schema-valid audit, no findings of substance. */

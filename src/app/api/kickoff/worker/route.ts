@@ -3,6 +3,8 @@ import { kickoffKilled } from "@/lib/kickoff/flags";
 import { claimNextJob, executeJob, finishJob, failInflightJobs, loadCasePayload } from "@/lib/kickoff/worker";
 import { getProvider } from "@/lib/kickoff/provider";
 import { evaluate, type UseCase } from "@/lib/engine";
+import type { Provenance } from "@/lib/kickoff/contracts";
+import { KICKOFF_EFFORT } from "@/lib/kickoff/claude";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // Vercel Pro ceiling — a single-shot 2-call run fits (BK-S2)
@@ -42,8 +44,17 @@ export async function GET(req: Request) {
   // Re-derive the verdict again at run time (the case could have changed between
   // enqueue and execution); the planner must echo this.
   const { verdict } = evaluate(uc as UseCase);
+  const provider = getProvider();
   const startedAt = Date.now();
-  const outcome = await executeJob(job.caseId, uc as UseCase, verdict, getProvider());
-  await finishJob(job.id, outcome, Date.now() - startedAt); // latency telemetry (BK-6)
+  const outcome = await executeJob(job.caseId, uc as UseCase, verdict, provider);
+  // Stamp the model that actually ran (real model, or "stub" in dev/CI) — the
+  // enqueue-time value in route.ts is only ever "stub", a placeholder for a job
+  // that hasn't run yet.
+  const provenance: Provenance = {
+    ...(job.provenance as Provenance),
+    model: provider.model,
+    modelParams: provider.model === "stub" ? {} : { effort: KICKOFF_EFFORT },
+  };
+  await finishJob(job.id, outcome, Date.now() - startedAt, provenance); // latency telemetry (BK-6)
   return NextResponse.json({ jobId: job.id, status: outcome.status }, { status: 200 });
 }

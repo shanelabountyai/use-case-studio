@@ -21,6 +21,11 @@ import { kickoffModel } from "./pricing";
 const PLANNER_MAX_TOKENS = 20_000;
 const CRITIC_MAX_TOKENS = 8_000;
 
+/** The effort both stages run at. Exported because provenance records it — a
+ *  second hardcoded copy would drift and re-introduce the lying-provenance bug
+ *  this was extracted to fix. */
+export const KICKOFF_EFFORT = "medium" as const;
+
 function timeoutMs(): number {
   const n = Number(process.env.KICKOFF_TIMEOUT_MS);
   return Number.isFinite(n) && n > 0 ? n : 280_000; // matches getLimits() default; fits 300s maxDuration
@@ -62,7 +67,7 @@ export async function callStructured<T>(
         max_tokens: maxTokens,
         system,
         messages,
-        output_config: { effort: "medium", format },
+        output_config: { effort: KICKOFF_EFFORT, format },
       },
       { signal: AbortSignal.timeout(timeoutMs()) },
     );

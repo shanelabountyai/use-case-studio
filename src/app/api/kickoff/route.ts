@@ -77,7 +77,9 @@ export async function POST(req: Request) {
   const provenance: Provenance = {
     caseVersion: hash,
     promptRosterVersion: PROMPT_ROSTER_VERSION,
-    model: "stub", // real model recorded when BK-3 wires the provider
+    model: "stub", // enqueue-time placeholder only — the worker overwrites this
+    // with the model that actually ran (or "stub" in dev/CI) when the job
+    // completes (see finishJob call in kickoff/worker/route.ts).
     modelParams: {},
     verdictAtGeneration: verdict,
     engineOutputsHash: hash,
