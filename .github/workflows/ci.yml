@@ -22,10 +22,10 @@ jobs:
   build-and-unit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
       # package-lock.json isn't committed in this repo (see .gitignore), so
       # `npm ci` (and setup-node's built-in lockfile cache) aren't available.
       - run: npm install
@@ -35,16 +35,23 @@ jobs:
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
         run: npm run build
       - name: Unit tests
+        # src/db/index.ts calls neon() at import time, so any module that
+        # imports db (limits.ts → the *.live.test.ts files) throws during
+        # collection when DATABASE_URL is unset — even though those tests skip
+        # themselves without BK_LIVE. A syntactically valid dummy is enough:
+        # this job never opens a connection, so no real secret is needed.
+        env:
+          DATABASE_URL: postgres://ci:ci@localhost:5432/ci
         run: npm run test
 
   integration:
     needs: build-and-unit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
       - run: npm install
       - name: Create Neon branch
         id: neon-branch
@@ -73,10 +80,10 @@ jobs:
     needs: integration
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
       - run: npm install
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -105,7 +112,7 @@ jobs:
         run: npx playwright test
       - name: Upload Playwright report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: playwright-report
           path: playwright-report/
