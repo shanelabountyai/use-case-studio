@@ -105,6 +105,16 @@ export function KickoffPanel({ ev, currentId, onDownload, onCopy, safeFile, case
     } finally { setBusy(false); }
   }, [jobId, onDownload, safeFile, caseName]);
 
+  const downloadPrds = useCallback(async () => {
+    if (!jobId) return;
+    setBusy(true); setMsg(null);
+    try {
+      const res = await fetch(`/api/kickoff/${jobId}/prds.md`);
+      if (!res.ok) { setMsg(errText(res.status, await res.json().catch(() => ({})))); return; }
+      onDownload(`${safeFile(caseName)}-prd-pack.md`, await res.text(), "text/markdown");
+    } finally { setBusy(false); }
+  }, [jobId, onDownload, safeFile, caseName]);
+
   const blocked =
     !currentId ? "Save this case to your library first — the plan is tied to a saved case."
     : ev.verdict !== "BUILD" ? `Verdict is ${ev.verdict}. Only BUILD cases generate a build plan.`
@@ -137,6 +147,13 @@ export function KickoffPanel({ ev, currentId, onDownload, onCopy, safeFile, case
           {approved && (
             <button onClick={downloadPackage} disabled={busy} style={btn(C.blue, "#fff")}>
               DOWNLOAD CLIENT PACKAGE
+            </button>
+          )}
+          {/* Working document, not a client deliverable — available as soon as
+              a plan exists, without waiting on approval. */}
+          {job?.plan && (
+            <button onClick={downloadPrds} disabled={busy} style={btn(C.surface, C.ink, `1px solid ${C.ink}`)}>
+              DOWNLOAD PRD PACK
             </button>
           )}
         </div>

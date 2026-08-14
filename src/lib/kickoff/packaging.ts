@@ -31,8 +31,9 @@ function flowDiagram(name: string, steps: string[], idx: number): string {
 }
 
 /* One self-contained prompt per milestone. Everything the PRD needs travels
-   inside it — the reader shouldn't have to hunt up the plan to use it. */
-function prdStarter(
+   inside it — the reader shouldn't have to hunt up the plan to use it. Shared
+   by the package (collapsed) and the PRD pack (flat), so the two can't drift. */
+function prdPrompt(
   m: IntegratedPlan["milestones"][number],
   uc: UseCase,
   plan: IntegratedPlan,
@@ -40,13 +41,6 @@ function prdStarter(
 ): string {
   const relatedGaps = audit?.gaps.slice(0, 3).map((g) => `${g.title}: ${g.detail}`) ?? [];
   return [
-    `#### ${m.phase} — ${m.goal}`,
-    "",
-    `**Exit criterion (this is the PRD's acceptance bar):** ${m.exitCriterion}`,
-    "",
-    "<details><summary>PRD starter prompt — paste into Claude Code</summary>",
-    "",
-    "```text",
     `Write a PRD for one milestone of an AI build. Ground everything in the context below and do not invent facts, benchmarks, or vendor requirements.`,
     "",
     `USE CASE: ${uc.name}`,
@@ -70,12 +64,122 @@ function prdStarter(
     ...plan.assumptions.slice(0, 6).map((a) => `  - ${a}`),
     "",
     `Produce: Context · Scope (in/out) · Acceptance criteria (derived from the exit criterion, each independently testable) · Dependencies · Risks and mitigations · Open questions. Mark every estimate as an estimate.`,
-    "```",
-    "",
-    "</details>",
   ]
     .filter((l) => l !== "")
     .join("\n");
+}
+
+function prdStarter(
+  m: IntegratedPlan["milestones"][number],
+  uc: UseCase,
+  plan: IntegratedPlan,
+  audit: CriticAudit | null,
+): string {
+  return [
+    `#### ${m.phase} — ${m.goal}`,
+    "",
+    `**Exit criterion (this is the PRD's acceptance bar):** ${m.exitCriterion}`,
+    "",
+    "<details><summary>PRD starter prompt — paste into Claude Code</summary>",
+    "",
+    "```text",
+    prdPrompt(m, uc, plan, audit),
+    "```",
+    "",
+    "</details>",
+  ].join("\n");
+}
+
+/** The PRD pack: every milestone prompt for one case in a single file, meant
+ *  to be dropped into the target repo and worked through in order. The session
+ *  starter goes first — it establishes the shared context once, so the
+ *  per-milestone prompts land in a session that already knows the build. */
+export function renderPrdPack(input: {
+  uc: UseCase;
+  plan: IntegratedPlan;
+  audit: CriticAudit | null;
+  provenance: Provenance;
+  version: number;
+  generatedOn: string;
+}): string {
+  const { uc, plan, audit, provenance, version, generatedOn } = input;
+  const ev = evaluate(uc);
+
+  const sessionStarter = [
+    `You are helping implement an AI build that has already been scoped, planned, and independently audited. Do not re-litigate the decision or re-scope the work — expand it into requirements an engineer can execute.`,
+    "",
+    `USE CASE: ${uc.name}`,
+    `VERDICT: ${ev.verdict} (composite ${ev.composite.toFixed(0)}/100) — ${ev.quadrant}`,
+    `PROBLEM: ${uc.problem}`,
+    `USERS: ${uc.users}`,
+    `PROJECT ACCEPTANCE BAR: ${uc.acceptanceBar}`,
+    `DATA: ${uc.dataSources} · format ${uc.dataFormat} · volume ${uc.dataVolume} · sensitivity ${uc.dataSensitivity} · freshness ${uc.dataFreshness}`,
+    `CONSTRAINTS: latency ${uc.latency} · oversight ${uc.oversight} · compliance: ${uc.compliance}`,
+    "",
+    `ARCHITECTURE: ${plan.architecturePattern} (task shape: ${plan.taskShape})`,
+    "",
+    `PLAN SUMMARY:`,
+    plan.executiveSummary,
+    "",
+    `MILESTONES:`,
+    ...plan.milestones.map((m) => `  ${m.phase}: ${m.goal} — exit: ${m.exitCriterion}`),
+    "",
+    audit ? `INDEPENDENT AUDIT VERDICT: ${audit.verdict}` : `NO INDEPENDENT AUDIT — this plan was not critic-reviewed. Treat its claims with more suspicion, not less.`,
+    ...(audit?.topFixes.length ? ["FIXES THE AUDIT DEMANDED BEFORE BUILD:", ...audit.topFixes.map((f) => `  - ${f}`)] : []),
+    "",
+    `RULES FOR THIS SESSION:`,
+    `  - Every acceptance criterion traces to a milestone exit criterion or the project acceptance bar. Do not invent new bars, and do not loosen existing ones.`,
+    `  - Mark every estimate as an estimate. No invented benchmarks, vendor requirements, or ROI figures.`,
+    `  - If something the PRD needs isn't in this context, list it as an open question rather than assuming it.`,
+    "",
+    `Read the repo first if one is open, then confirm you have the context before we start on individual milestones.`,
+  ].join("\n");
+
+  const parts: string[] = [
+    `# PRD Pack — ${uc.name}`,
+    "",
+    `**Verdict:** ${ev.verdict} (${ev.composite.toFixed(0)}/100) · **Plan version:** v${version} · **Generated:** ${generatedOn}  `,
+    `**Model:** \`${provenance.model}\` · **Prompt roster:** \`${provenance.promptRosterVersion}\`${audit ? ` · **Audit:** ${audit.verdict}` : " · **No audit attached**"}`,
+    "",
+    DECISION_SUPPORT_DISCLAIMER,
+    "",
+    "## How to use this",
+    "",
+    "1. Open Claude Code in the repo this will be built in.",
+    "2. Paste **Step 0** once, to load the shared context.",
+    `3. Work through the ${plan.milestones.length} milestone prompts in order, one per session or one after another — each is self-contained, so order is a convenience rather than a requirement.`,
+    "4. Save each PRD as it comes out (`docs/prd/<phase>.md` is a reasonable home).",
+    "",
+    "The milestone's exit criterion is the PRD's acceptance bar. If a PRD comes back with a softer bar than the milestone it came from, that's the thing to push back on.",
+    "",
+    "---",
+    "",
+    "## Step 0 — session starter",
+    "",
+    "```text",
+    sessionStarter,
+    "```",
+    "",
+    "---",
+    "",
+  ];
+
+  plan.milestones.forEach((m, i) => {
+    parts.push(
+      `## Step ${i + 1} — ${m.phase}: ${m.goal}`,
+      "",
+      `**Exit criterion (the PRD's acceptance bar):** ${m.exitCriterion}`,
+      m.duration ? `**Planned duration:** ${m.duration} _(estimate)_` : "",
+      m.ownerOfRisk ? `**Risk owner:** ${m.ownerOfRisk}` : "",
+      "",
+      "```text",
+      prdPrompt(m, uc, plan, audit),
+      "```",
+      "",
+    );
+  });
+
+  return parts.filter((l) => l !== "").join("\n");
 }
 
 /** The client-facing package. `audit` may be null for a partial run — the

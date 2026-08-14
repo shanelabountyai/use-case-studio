@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderKickoffPackage } from "./packaging";
+import { renderKickoffPackage, renderPrdPack } from "./packaging";
 import { stubPlanner, stubCritic } from "./provider";
 import { serializeGrounding } from "./grounding";
 import { CASE_POLICY_LOOKUP } from "./fixtures";
@@ -86,5 +86,47 @@ describe("renderKickoffPackage", () => {
     const block = md.slice(md.indexOf("```mermaid"), md.indexOf("```", md.indexOf("```mermaid") + 3));
     expect(block).not.toContain('"quoted"');
     expect(block.split("\n").filter((l) => l.includes("n0_1")).length).toBeGreaterThan(0);
+  });
+});
+
+describe("renderPrdPack", () => {
+  const pack = (over: Partial<Parameters<typeof renderPrdPack>[0]> = {}) =>
+    renderPrdPack({ uc: CASE_POLICY_LOOKUP, plan, audit, provenance, version: 2, generatedOn: "2026-08-14", ...over });
+
+  it("opens with a session starter, then one step per milestone", () => {
+    const md = pack();
+    expect(md).toContain("## Step 0 — session starter");
+    plan.milestones.forEach((m, i) => expect(md).toContain(`## Step ${i + 1} — ${m.phase}`));
+  });
+
+  it("carries every exit criterion as the PRD's acceptance bar", () => {
+    const md = pack();
+    for (const m of plan.milestones) expect(md).toContain(m.exitCriterion);
+    expect(md).toContain("the PRD's acceptance bar");
+  });
+
+  it("tells the session not to loosen the bars or invent figures", () => {
+    const md = pack();
+    expect(md).toContain("do not loosen existing ones");
+    expect(md).toContain("No invented benchmarks");
+  });
+
+  /* Without an audit the starter must warn rather than stay quiet — an
+     unreviewed plan deserves more suspicion, not less. */
+  it("warns in the starter when no audit is attached", () => {
+    const md = pack({ audit: null });
+    expect(md).toContain("NO INDEPENDENT AUDIT");
+    expect(md).toContain("more suspicion, not less");
+  });
+
+  it("shares its prompt body with the package — the two can't drift", () => {
+    const inPack = pack();
+    const inPackage = renderKickoffPackage({
+      uc: CASE_POLICY_LOOKUP, plan, audit, provenance,
+      engagement: {}, version: 2, generatedOn: "2026-08-14",
+    });
+    const marker = `MILESTONE: ${plan.milestones[0].phase}`;
+    expect(inPack).toContain(marker);
+    expect(inPackage).toContain(marker);
   });
 });
