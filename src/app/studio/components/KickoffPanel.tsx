@@ -44,6 +44,8 @@ export function KickoffPanel({ ev, currentId, onDownload, onCopy, safeFile, case
   const [job, setJob] = useState<Job | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  // Both exports are gated on approval server-side; this just reveals the button.
+  const [approved, setApproved] = useState(false);
   const jobId = job?.jobId ?? null;
   const live = job ? LIVE.has(job.status) : false;
 
@@ -89,6 +91,17 @@ export function KickoffPanel({ ev, currentId, onDownload, onCopy, safeFile, case
       if (!ex.ok) { setMsg(errText(ex.status, await ex.json().catch(() => ({})))); return; }
       onDownload(`${safeFile(caseName)}-build-plan.md`, await ex.text(), "text/markdown");
       setJob((j) => (j ? { ...j, status: "approved" } : j));
+      setApproved(true);
+    } finally { setBusy(false); }
+  }, [jobId, onDownload, safeFile, caseName]);
+
+  const downloadPackage = useCallback(async () => {
+    if (!jobId) return;
+    setBusy(true); setMsg(null);
+    try {
+      const res = await fetch(`/api/kickoff/${jobId}/package.md`);
+      if (!res.ok) { setMsg(errText(res.status, await res.json().catch(() => ({})))); return; }
+      onDownload(`${safeFile(caseName)}-kickoff-package.md`, await res.text(), "text/markdown");
     } finally { setBusy(false); }
   }, [jobId, onDownload, safeFile, caseName]);
 
@@ -119,6 +132,11 @@ export function KickoffPanel({ ev, currentId, onDownload, onCopy, safeFile, case
           {(job?.status === "complete" || job?.status === "partial") && (
             <button onClick={approveAndExport} disabled={busy} style={btn(C.ink, C.paper)}>
               APPROVE &amp; DOWNLOAD PLAN
+            </button>
+          )}
+          {approved && (
+            <button onClick={downloadPackage} disabled={busy} style={btn(C.blue, "#fff")}>
+              DOWNLOAD CLIENT PACKAGE
             </button>
           )}
         </div>
