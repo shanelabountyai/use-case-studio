@@ -26,5 +26,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ jobId: 
     cost: row.cost,
     note: row.note,
     createdAt: row.createdAt,
+    // Which model and prompt roster actually produced this — the caller can't
+    // tell a bk-1 audit from a bk-2 one without it, and the rendered plan is
+    // only interpretable alongside it.
+    provenance: row.provenance,
+    version: row.version,
   });
 }
