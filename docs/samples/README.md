@@ -16,13 +16,19 @@ Published for reading (Mermaid renders, private to the account that owns them):
 - Insurance FNOL intake — https://claude.ai/code/artifact/b87722ae-592e-4abd-82bf-5727fa115918
 - Grant proposal assembly — https://claude.ai/code/artifact/4147c9fa-b740-48d6-aeb3-ec3f344e3be3
 
-## Known caveat
+## Regenerated under bk-2-claude
 
-All three carry `promptRosterVersion: bk-1-claude` — they were generated before
-the critic rubric was fixed, when the verdict field was measured constant
-(SHIP WITH FIXES across eight runs regardless of plan quality). **Their
-findings are real; their verdicts are not.** Regenerate under `bk-2-claude`
-before using any of these as a reference for what a good audit looks like.
+All three were regenerated 2026-08-14 under the fixed critic rubric, and the
+verdicts now vary across cases rather than sitting on SHIP WITH FIXES:
+
+| Sample | Critic verdict |
+|---|---|
+| support-ticket-deflection | **NEEDS REWORK** |
+| insurance-fnol-intake | SHIP WITH FIXES |
+| grant-proposal-assembly | SHIP WITH FIXES |
+
+Under `bk-1-claude` all three read SHIP WITH FIXES, as did every other run —
+the field was constant by construction. These verdicts mean something.
 
 ## Regenerating
 
