@@ -156,11 +156,18 @@ function milestoneTexts(p: IntegratedPlan): string[] {
 }
 
 /** Does some single milestone both name an evaluation asset and take
- *  responsibility for producing it? Vacuously true when the plan never leans on
- *  one — a plan with no golden set has nothing to own. */
-export function evalAssetOwned(p: IntegratedPlan): boolean {
-  if (!EVAL_ASSET.test(planText(p))) return true;
-  return milestoneTexts(p).some((t) => EVAL_ASSET.test(t) && ASSET_CREATION.test(t));
+ *  responsibility for producing it? Vacuously satisfied when the plan never
+ *  leans on one — a plan with no golden set has nothing to own.
+ *
+ *  Returns `uses` alongside `owned` so a passing result says WHICH pass it was.
+ *  A bare boolean made a live run unreadable: the invariant reported PASS and
+ *  there was no way to tell whether the planner had assigned an owning milestone
+ *  or simply never mentioned an asset — which is the one thing the check exists
+ *  to distinguish. */
+export function evalAssetOwnership(p: IntegratedPlan): { uses: boolean; owned: boolean } {
+  const uses = EVAL_ASSET.test(planText(p));
+  if (!uses) return { uses: false, owned: true };
+  return { uses: true, owned: milestoneTexts(p).some((t) => EVAL_ASSET.test(t) && ASSET_CREATION.test(t)) };
 }
 
 // Per-taskShape evaluation vocabulary that a real plan for that shape must name.
@@ -216,7 +223,7 @@ export function checkPlanInvariants(
   const vocab = EVAL_VOCAB[g.taskShape];
   const planFamily = architectureFamily(plan.architecturePattern);
   const groundFamily = architectureFamily(g.recommendation.architecturePattern);
-  const assetOwned = evalAssetOwned(plan);
+  const asset = evalAssetOwnership(plan);
   const results: InvariantResult[] = [
     {
       name: "acceptance-bar-spine",
@@ -230,10 +237,12 @@ export function checkPlanInvariants(
     },
     {
       name: "eval-asset-owned",
-      pass: assetOwned,
-      detail: assetOwned
-        ? "evaluation assets are produced by a milestone (or none are used)"
-        : "plan depends on a golden/held-out set that no milestone assembles",
+      pass: asset.owned,
+      detail: !asset.uses
+        ? "vacuous: plan leans on no golden/held-out set"
+        : asset.owned
+          ? "a milestone assembles the eval asset it leans on"
+          : "plan depends on a golden/held-out set that no milestone assembles",
     },
     {
       name: "no-guarantees",
