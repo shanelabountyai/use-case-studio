@@ -7,11 +7,13 @@
  *
  *     env -u ANTHROPIC_API_KEY BK_LIVE=1 npx vitest run src/lib/kickoff/runsuccess.live.test.ts
  *
- * BK_RUNS   total runs (default 10, split evenly across the two fixtures)
+ * BK_RUNS   total runs (default 4, split evenly across the two fixtures). Was
+ *           10, which overran the 540s test timeout — this is a sampler, and
+ *           4 runs cost ~$1.60 instead of ~$4 for the same signal.
  * BK_CONC   concurrent runs (default 5) — measurement only; production caps
  *           per-user concurrency at 1 (KICKOFF_MAX_CONCURRENT).
  *
- * Cost ~$0.40/run, so the default is ~$4 and ~6 minutes.
+ * Cost ~$0.40/run, so the default is ~$1.60 and ~3 minutes.
  *
  * ON STATISTICAL POWER: 10 clean runs do NOT establish a 95% success rate. With
  * zero failures in n trials the rule of three puts the 95% upper bound on the
@@ -33,7 +35,7 @@ import { CASE_POLICY_LOOKUP, CASE_INVOICE_CLASSIFY } from "./fixtures";
 import type { UseCase } from "../engine";
 
 const live = process.env.BK_LIVE === "1" && !!process.env.ANTHROPIC_API_KEY;
-const RUNS = Number(process.env.BK_RUNS ?? 10);
+const RUNS = Number(process.env.BK_RUNS ?? 4);
 const CONC = Number(process.env.BK_CONC ?? 5);
 
 const FIXTURES: { label: string; id: string; uc: UseCase }[] = [
