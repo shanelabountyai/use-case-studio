@@ -123,8 +123,9 @@ const SHAPE_EVAL: Record<string, string> = {
 
 /** Shape-specific body. Only the shapes the golden corpus actually produces are
  *  spelled out; anything else gets the architecture-neutral default. */
-const SHAPE_BODY: Record<string, { summary: string; architecture: string; dataPipeline: string; governance: string; flow: { name: string; steps: string[] }; goal: string }> = {
+const SHAPE_BODY: Record<string, { summary: string; architecture: string; dataPipeline: string; governance: string; flow: { name: string; steps: string[] }; goal: string; evalAsset: string }> = {
   lookup: {
+    evalAsset: "golden set of authored questions",
     summary: "Retrieval-grounded answering over the existing corpus, with citations and an explicit refusal path.",
     architecture: "Grounded retrieval with refusal gates over the corpus; answers cite the passages they came from.",
     dataPipeline: "Ingest, chunk, embed, index; re-index on source change so answers track the current documents.",
@@ -133,6 +134,7 @@ const SHAPE_BODY: Record<string, { summary: string; architecture: string; dataPi
     goal: "retrieval MVP over the corpus",
   },
   classify: {
+    evalAsset: "labelled held-out split",
     summary: "Direct prompting with a structured, enumerated label set and a confidence threshold that defers uncertain items to people.",
     architecture: "Direct prompting with structured output: a fixed label schema plus a confidence score per prediction; no retrieval layer.",
     dataPipeline: "Assemble a labelled set from the historical folders, hold out a frozen evaluation split, and quarantine noisy labels before training prompts against them.",
@@ -143,6 +145,7 @@ const SHAPE_BODY: Record<string, { summary: string; architecture: string; dataPi
 };
 
 const DEFAULT_BODY = {
+  evalAsset: "held-out evaluation set",
   summary: "An implementation that expands the recommended architecture for this case.",
   architecture: "Expands the recommended pattern; no capability is assumed beyond what the grounding supports.",
   dataPipeline: "Assemble the named sources, validate them, and keep an auditable path from input to output.",
@@ -170,6 +173,15 @@ export function basePlan(g: GroundingInput): IntegratedPlan {
     },
     dataFlows: [body.flow],
     milestones: [
+      // The eval asset gets its own phase before anything consumes it. basePlan
+      // is the fabrication gate's clean control, so it has to satisfy the
+      // eval-asset-owned invariant the way a real plan is now asked to.
+      {
+        phase: "P0",
+        goal: `assemble the ${body.evalAsset}`,
+        exitCriterion: `${body.evalAsset} assembled and frozen, with a named owner, before P1 scores against it`,
+        duration: "~1 week (estimate)",
+      },
       {
         phase: "P1",
         goal: body.goal,

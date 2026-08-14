@@ -110,6 +110,7 @@ Hard rules (violating any produces an unusable plan):
 - Do NOT name a specific vendor/product as mandatory. Describe capabilities ("a managed vector store"), not requirements ("you must use Pinecone").
 - If verdict === "REFINE": refineGate is REQUIRED with ≥1 condition and ≥1 noGoCondition (when to stop). If verdict !== "REFINE": refineGate MUST be null.
 - Every section's markdown must be substantive and specific to THIS case (architecture, dataPipeline, evaluation, governance, delivery; integrationNotes optional).
+- Anything your evaluation depends on must be BUILT by a milestone, not assumed to exist. If the plan leans on a golden set, held-out split, labelled set, or scored rubric sample, one milestone must assemble it — with its own exitCriterion and ownerOfRisk — and it must come before the phase that first consumes it. Naming the asset in the evaluation section is not enough; a phase that "runs the golden set" nobody authored is a plan that starts with nothing to run.
 
 Return only JSON matching the schema.`;
 

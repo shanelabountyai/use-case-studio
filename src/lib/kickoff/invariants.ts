@@ -114,6 +114,55 @@ export function flagUnlabeledMetrics(text: string, allowed: string[]): string[] 
   return out;
 }
 
+/* Evaluation assets the plan can lean on but must also CREATE.
+
+   Found by hand-writing PRDs from a generated package (Aug 2026). The grants plan
+   leaned on a golden set in six of seven phases — "run the full golden set", "10
+   golden-set briefs" — and no milestone assembled it, so the first build phase
+   started with nothing to run against and the PRD had to patch the hole by hand.
+
+   The planner is INCONSISTENT here, not uniformly broken: checked against the
+   same generator's other two packages, the FNOL plan gave the asset a dedicated
+   phase ("Phase 1 — Golden set and audit record — Build the stratified 400-claim
+   labeled set") and support-ticket assigned it too. One in three shipped without
+   it, which is exactly what a deterministic invariant is for — the prompt rule
+   (provider bk-3) raises the floor, this catches the run where it doesn't take.
+
+   Naming the asset in the evaluation section is NOT ownership: the grants plan
+   said "Assemble 50–100 scored items" in prose and still left it off every
+   milestone. So the check is milestone-scoped on purpose — a phase has a
+   duration and an ownerOfRisk, and prose has neither.
+
+   ponytail: lexical match per milestone — an asset noun and a creation verb in
+   the same milestone passes, even if that phase isn't really the producer.
+   Tighten only if a real run shows a false pass; false passes are the safer
+   direction here, since an invariant that fails honest plans teaches people to
+   ignore the gate (see the guarantee-detector scar tissue above). */
+const EVAL_ASSET = /golden set|golden corpus|held[- ]out\s+\w*\s*(?:set|split|sample)|labell?ed set|evaluation set|eval set/i;
+
+/** Verbs that make a milestone the asset's producer rather than its consumer.
+ *  "run"/"score"/"generate" are deliberately absent — consuming a golden set is
+ *  what every later phase does, and counting that as ownership would pass the
+ *  exact plans this was written to catch. */
+const ASSET_CREATION = /\b(assembl|curat|author|construct|compil|collect|label|creat|source|gather|populat)\w*/i;
+
+/** Milestone text, per milestone (the granularity the ownership check needs —
+ *  planText flattens all of them together, which would let one phase's verb
+ *  launder another phase's asset). */
+function milestoneTexts(p: IntegratedPlan): string[] {
+  return p.milestones.map(
+    (m) => `${m.phase} ${m.goal} ${m.exitCriterion} ${m.duration ?? ""} ${m.ownerOfRisk ?? ""}`,
+  );
+}
+
+/** Does some single milestone both name an evaluation asset and take
+ *  responsibility for producing it? Vacuously true when the plan never leans on
+ *  one — a plan with no golden set has nothing to own. */
+export function evalAssetOwned(p: IntegratedPlan): boolean {
+  if (!EVAL_ASSET.test(planText(p))) return true;
+  return milestoneTexts(p).some((t) => EVAL_ASSET.test(t) && ASSET_CREATION.test(t));
+}
+
 // Per-taskShape evaluation vocabulary that a real plan for that shape must name.
 const EVAL_VOCAB: Record<string, RegExp> = {
   lookup: /golden set|citation|refus/i,
@@ -167,6 +216,7 @@ export function checkPlanInvariants(
   const vocab = EVAL_VOCAB[g.taskShape];
   const planFamily = architectureFamily(plan.architecturePattern);
   const groundFamily = architectureFamily(g.recommendation.architecturePattern);
+  const assetOwned = evalAssetOwned(plan);
   const results: InvariantResult[] = [
     {
       name: "acceptance-bar-spine",
@@ -177,6 +227,13 @@ export function checkPlanInvariants(
       name: "eval-vocabulary",
       pass: !vocab || vocab.test(text),
       detail: `taskShape=${g.taskShape || "(none)"} eval vocabulary present`,
+    },
+    {
+      name: "eval-asset-owned",
+      pass: assetOwned,
+      detail: assetOwned
+        ? "evaluation assets are produced by a milestone (or none are used)"
+        : "plan depends on a golden/held-out set that no milestone assembles",
     },
     {
       name: "no-guarantees",

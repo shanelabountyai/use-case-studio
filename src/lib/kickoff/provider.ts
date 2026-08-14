@@ -18,7 +18,10 @@ export type Critic = (plan: IntegratedPlan, g: GroundingInput) => Promise<{ audi
 // traceable to the prompts that produced it. bk-1: BK-3/BK-4 Claude stages live.
 // bk-2: critic rubric revised (verdict derived from findings, acceptance bar
 // judged as written) after the verdict was measured constant across 8 runs.
-export const PROMPT_ROSTER_VERSION = "bk-2-claude";
+// bk-3: planner must give evaluation assets (golden set, held-out split) an
+// owning milestone — the grants package leaned on one across six phases and
+// assembled it in none, while the other two packages assigned it correctly.
+export const PROMPT_ROSTER_VERSION = "bk-3-claude";
 
 const stubSection = (heading: string) => ({ heading, markdown: `_(stub)_ ${heading} section.` });
 

@@ -21,7 +21,10 @@ const okPlan: IntegratedPlan = {
     delivery: { heading: "Delivery", markdown: "~12 weeks (estimate)." },
   },
   dataFlows: [{ name: "online", steps: ["query", "retrieve", "answer"] }],
-  milestones: [{ phase: "P1", goal: "MVP", exitCriterion: "golden set holds", duration: "~2 weeks (estimate)" }],
+  milestones: [
+    { phase: "P0", goal: "author the golden set", exitCriterion: "golden set authored and frozen by its named owner", duration: "~1 week (estimate)" },
+    { phase: "P1", goal: "MVP", exitCriterion: "golden set holds", duration: "~2 weeks (estimate)" },
+  ],
   assumptions: ["English corpus (estimate)"],
   refineGate: null,
 };
@@ -138,6 +141,50 @@ describe("checkPlanInvariants", () => {
     const odd = { ...okPlan, architecturePattern: "Bespoke in-house approach" };
     const arch = checkPlanInvariants(odd, null, g).find((r) => r.name === "architecture-family-match");
     expect(arch?.pass).toBe(true);
+  });
+
+  /* The gap that motivated this invariant, reproduced from the real packages:
+     every phase consumes the golden set, none assembles it. */
+  it("fails eval-asset-owned when milestones only consume the golden set", () => {
+    const consumesOnly: IntegratedPlan = {
+      ...okPlan,
+      milestones: [
+        { phase: "P1", goal: "MVP", exitCriterion: "10 golden-set cases generated end to end" },
+        { phase: "P2", goal: "evaluate", exitCriterion: "run the full golden set; ≥90% holds" },
+      ],
+    };
+    const r = checkPlanInvariants(consumesOnly, null, g).find((x) => x.name === "eval-asset-owned");
+    expect(r?.pass).toBe(false);
+  });
+
+  it("passes eval-asset-owned when one milestone assembles the asset", () => {
+    const r = checkPlanInvariants(okPlan, null, g).find((x) => x.name === "eval-asset-owned");
+    expect(r?.pass).toBe(true);
+  });
+
+  it("passes eval-asset-owned vacuously when the plan leans on no eval asset", () => {
+    const noAsset: IntegratedPlan = {
+      ...okPlan,
+      executiveSummary: "RAG over the corpus; ≥90% correct-with-citation.",
+      sections: { ...okPlan.sections, evaluation: { heading: "Eval", markdown: "Citation-correctness scored per query; refuse on low confidence." } },
+      milestones: [{ phase: "P1", goal: "MVP", exitCriterion: "≥90% correct-with-citation" }],
+    };
+    const r = checkPlanInvariants(noAsset, null, g).find((x) => x.name === "eval-asset-owned");
+    expect(r?.pass).toBe(true);
+  });
+
+  it("does not let one phase's verb launder another phase's asset", () => {
+    // "curated" belongs to the corpus milestone, not the golden-set one — the
+    // flattened-text version of this check passed it.
+    const laundered: IntegratedPlan = {
+      ...okPlan,
+      milestones: [
+        { phase: "P1", goal: "ingest", exitCriterion: "source corpus curated and indexed" },
+        { phase: "P2", goal: "evaluate", exitCriterion: "run the full golden set; ≥90% holds" },
+      ],
+    };
+    const r = checkPlanInvariants(laundered, null, g).find((x) => x.name === "eval-asset-owned");
+    expect(r?.pass).toBe(false);
   });
 
   it("fails critic-verdict-wellformed when no audit is attached", () => {
