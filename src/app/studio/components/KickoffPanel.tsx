@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Evaluation } from "@/lib/engine";
+import type { IntegratedPlan, CriticAudit } from "@/lib/kickoff/contracts";
 import { C, MONO, btn } from "../theme";
 import { Eyebrow, PanelShell } from "./atoms";
+import { PlanView } from "./PlanView";
 
 /* Build Kickoff trigger (interim UI). The pipeline shipped API-only — this is
    the smallest surface that reaches it: POST /api/kickoff, poll the job, then
@@ -18,6 +20,8 @@ type Job = {
   status: "queued" | "running" | "partial" | "complete" | "failed" | "approved";
   cost: { usd?: number } | null;
   note: string | null;
+  plan: IntegratedPlan | null;
+  audit: CriticAudit | null;
 };
 
 const LIVE = new Set(["queued", "running"]);
@@ -64,7 +68,7 @@ export function KickoffPanel({ ev, currentId, onDownload, onCopy, safeFile, case
         body: JSON.stringify({ caseId: currentId, ...(confirmSendToProvider && { confirmSendToProvider: true }) }),
       });
       const body = await res.json().catch(() => ({}));
-      if (res.status === 202) { setJob({ jobId: body.jobId, status: "queued", cost: null, note: null }); return; }
+      if (res.status === 202) { setJob({ jobId: body.jobId, status: "queued", cost: null, note: null, plan: null, audit: null }); return; }
       // PARK returns 200 with a "what would move this to BUILD" note, not a job.
       if (res.ok && body.note) { setMsg(body.note); return; }
       if (res.status === 409 && body.needs === "confirmSendToProvider") {
@@ -132,6 +136,10 @@ export function KickoffPanel({ ev, currentId, onDownload, onCopy, safeFile, case
           {job.status === "approved" && <div className="mt-1">Downloaded. Regenerate for a fresh plan.</div>}
         </div>
       )}
+
+      {/* A partial keeps its plan (the critic lane failed), so render whatever
+          the run produced rather than hiding it behind the download. */}
+      {job?.plan && <PlanView plan={job.plan} audit={job.audit} />}
 
       {msg && (
         <div className="mt-4 p-3 text-sm" style={{ background: C.amberSoft, border: `1px solid ${C.amber}`, color: C.ink }} role="alert">
