@@ -14,6 +14,19 @@ describe("inputsPrecheck", () => {
     expect(fields).toEqual(["acceptanceBar", "dataSensitivity", "dataSources", "taskShape"]);
   });
 
+  /* Measured: the critic accepted "users are happy with it and adoption is
+     good" as the plan's spine. Unfalsifiable bars are refused here instead. */
+  it("rejects an acceptance bar with no measurable quantity", () => {
+    const r = inputsPrecheck({ ...CASE_POLICY_LOOKUP, acceptanceBar: "Users are happy with it and adoption is good." });
+    expect(r.ok).toBe(false);
+    expect(r.missing.map((m) => m.field)).toEqual(["acceptanceBar"]);
+  });
+
+  it("accepts a bar that states a threshold", () => {
+    const r = inputsPrecheck({ ...CASE_POLICY_LOOKUP, acceptanceBar: "≥90% correct on a 100-item test set." });
+    expect(r.ok).toBe(true);
+  });
+
   it("rejects an unresolvable task shape", () => {
     const r = inputsPrecheck({ ...CASE_POLICY_LOOKUP, taskShape: "banana" });
     expect(r.ok).toBe(false);

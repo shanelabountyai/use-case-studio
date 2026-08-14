@@ -119,8 +119,26 @@ describe("realCritic", () => {
   it("returns the parsed audit", async () => {
     create.mockResolvedValueOnce(reply(AUDIT));
     const r = await realCritic(PLAN, g);
-    expect(r.audit.verdict).toBe("SHIP WITH FIXES");
     expect(r.audit.gaps.length).toBeGreaterThan(0);
+  });
+
+  /* The model's verdict field was measured constant across 8 runs, so it is
+     recomputed from the findings. AUDIT reports a clean plan but claims SHIP
+     WITH FIXES — the derived value must win. */
+  it("overrides the model's verdict with the one derived from its findings", async () => {
+    create.mockResolvedValueOnce(reply(AUDIT));
+    const r = await realCritic(PLAN, g);
+    expect(AUDIT.verdict).toBe("SHIP WITH FIXES");
+    expect(r.audit.verdict).toBe("SHIP AS-IS");
+  });
+
+  it("derives NEEDS REWORK when the model reports a must-remove fabrication", async () => {
+    create.mockResolvedValueOnce(reply({
+      ...AUDIT,
+      fabricationScan: [{ quote: "guaranteed zero errors", verdict: "must-remove" }],
+    }));
+    const r = await realCritic(PLAN, g);
+    expect(r.audit.verdict).toBe("NEEDS REWORK");
   });
 
   it("receives only the plan and the grounding — no planner internals (P0.6)", async () => {

@@ -11,6 +11,17 @@ import { optLabel, type UseCase } from "../engine";
 const has = (v: string) => v.trim().length > 0;
 const KNOWN_SHAPES = new Set(["lookup", "classify", "actions", "process", "generate"]);
 
+/* An acceptance bar with no quantity is not a bar — "users are happy with it
+   and adoption is good" is unfalsifiable, and a plan built on it can't be
+   wrong. The critic was measured accepting exactly that as the plan's spine,
+   so this refuses it deterministically before any spend rather than relying on
+   the LLM to object.
+   ponytail: presence of a number is a proxy for measurability, not a proof of
+   it — "about 100 users like it" passes. Tighten only if vague-but-numeric
+   bars actually show up. */
+const QUANTIFIED = /\d/;
+const measurableBar = (v: string) => QUANTIFIED.test(v);
+
 export interface PrecheckResult {
   ok: boolean;
   missing: { field: string; label: string }[];
@@ -22,6 +33,11 @@ export function inputsPrecheck(uc: UseCase): PrecheckResult {
   const missing: { field: string; label: string }[] = [];
   if (!has(uc.acceptanceBar))
     missing.push({ field: "acceptanceBar", label: "a measurable acceptance bar (the plan's spine)" });
+  else if (!measurableBar(uc.acceptanceBar))
+    missing.push({
+      field: "acceptanceBar",
+      label: "a NUMBER in the acceptance bar — a threshold, rate, or sample size (e.g. \"≥90% correct on a 100-item test set\"). Without one, \"does it work?\" has no answer",
+    });
   if (!has(uc.dataSources))
     missing.push({ field: "dataSources", label: "named data source(s)" });
   if (!has(uc.dataSensitivity))

@@ -132,12 +132,31 @@ Audit for:
 - consistencyIssues: internal contradictions (a milestone that ignores the acceptance bar, a data flow the architecture never mentions). [] if none.
 - verdictIntegrity: does the plan's verdict match the grounding verdict and avoid quietly arguing for a rosier one? pass=false with a note if it drifts.
 - gaps: at least ONE concrete gap the plan should address before build (missing eval strategy, unhandled failure mode, absent rollback). Always find at least one.
-- acceptanceBarSpine: is the grounding's acceptanceBar the through-line of the milestones? isSpine + one line of evidence.
 - overclaims: statements that promise more than the design supports. [] if none.
-- verdict: "SHIP AS-IS" (clean), "SHIP WITH FIXES" (real but bounded issues), or "NEEDS REWORK" (fabrications or verdict drift present).
+- verdict: report your honest judgment, but note it is RECOMPUTED from the findings above — inflating or softening it changes nothing. Spend your effort on the findings being right.
+- acceptanceBarSpine: judge the bar AS WRITTEN in the grounding. If it states no measurable threshold, isSpine is false — a plan that promises to define the bar later is not a plan built on one.
 - topFixes: the ≤3 highest-leverage corrections, most important first.
 
 Be specific and quote the plan. Return only JSON matching the schema.`;
+
+/* The model's own verdict field was measured to be constant: eight runs — six
+   well-specified cases, one deliberately incoherent one — all returned SHIP
+   WITH FIXES. The rubric made it the only reachable value (gaps are required to
+   be non-empty, so SHIP AS-IS never applies; NEEDS REWORK needed a must-remove
+   fabrication that rarely fires). A verdict that never varies carries no
+   information, so it is derived here from the findings the critic reports
+   rather than chosen by it. The findings themselves were accurate — it is only
+   the summary judgment that was stuck. */
+export function deriveVerdict(a: Omit<CriticAudit, "verdict">): CriticAudit["verdict"] {
+  const mustRemove = a.fabricationScan.some((f) => f.verdict === "must-remove");
+  if (mustRemove || !a.verdictIntegrity.pass || !a.acceptanceBarSpine.isSpine) return "NEEDS REWORK";
+
+  const mustLabel = a.fabricationScan.some((f) => f.verdict === "must-label");
+  const clean = !mustLabel && a.overclaims.length === 0 && a.consistencyIssues.length === 0;
+  // Gaps alone don't block: the schema requires at least one, so treating any
+  // gap as a defect would pin this to SHIP WITH FIXES the same way.
+  return clean ? "SHIP AS-IS" : "SHIP WITH FIXES";
+}
 
 export const realCritic: Critic = async (plan, g: GroundingInput) => {
   const { data, inputTokens, outputTokens } = await callStructured(
@@ -146,5 +165,5 @@ export const realCritic: Critic = async (plan, g: GroundingInput) => {
     `Audit this plan.\n\nGROUNDING (source of truth):\n${JSON.stringify(g, null, 2)}\n\nPLAN TO AUDIT:\n${JSON.stringify(plan, null, 2)}`,
     CRITIC_MAX_TOKENS,
   );
-  return { audit: data, inputTokens, outputTokens };
+  return { audit: { ...data, verdict: deriveVerdict(data) }, inputTokens, outputTokens };
 };
