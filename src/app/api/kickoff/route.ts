@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
@@ -13,6 +13,7 @@ import { PROMPT_ROSTER_VERSION } from "@/lib/kickoff/provider";
 import type { Provenance } from "@/lib/kickoff/contracts";
 
 export const runtime = "nodejs"; // Neon HTTP driver + node:crypto (caseVersionHash)
+export const maxDuration = 300; // after() waits for the worker it starts, which can use its full 300s
 
 const owned = (id: string, userId: string) => and(eq(useCases.id, id), eq(useCases.userId, userId));
 
@@ -85,5 +86,16 @@ export async function POST(req: Request) {
     engineOutputsHash: hash,
   };
   const job = await createJob({ caseId, userId: session.user.id, provenance });
+  // Start the worker now instead of waiting for the cron, which is a
+  // 15-minute backstop: an every-minute cron kept the Neon database from
+  // ever suspending. Awaited in full, not fired and dropped: a worker cut off
+  // mid-job would leave it claimed and in flight.
+  const secret = process.env.CRON_SECRET;
+  if (secret)
+    after(() =>
+      fetch(new URL("/api/kickoff/worker", req.url), {
+        headers: { authorization: `Bearer ${secret}` },
+      }).catch(() => {}),
+    );
   return NextResponse.json({ jobId: job.id, status: "queued" }, { status: 202 });
 }
