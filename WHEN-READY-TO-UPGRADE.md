@@ -77,3 +77,6 @@ env -u ANTHROPIC_API_KEY BK_LIVE=1 npx vitest run src/lib/kickoff/gate.live.test
 env -u ANTHROPIC_API_KEY BK_LIVE=1 npx vitest run src/lib/kickoff/runsuccess.live.test.ts
 ```
 (`env -u ANTHROPIC_API_KEY` matters — a shell key shadows `.env` and 401s.)
+
+> **2026-09-26 — cron cut to daily (`0 6 * * *`) to let Neon suspend; not in active use.**
+> The worker also starts on enqueue, so the cron is only a backstop. **If usage picks up, restore `*/15 * * * *`** (or `* * * * *` for the original drain) in `vercel.json`.
