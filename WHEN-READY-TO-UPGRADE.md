@@ -80,3 +80,8 @@ env -u ANTHROPIC_API_KEY BK_LIVE=1 npx vitest run src/lib/kickoff/runsuccess.liv
 
 > **2026-09-26 — cron cut to daily (`0 6 * * *`) to let Neon suspend; not in active use.**
 > The worker also starts on enqueue, so the cron is only a backstop. **If usage picks up, restore `*/15 * * * *`** (or `* * * * *` for the original drain) in `vercel.json`.
+
+> **2026-09-29 — Vercel auto-deploy off (`git.deploymentEnabled: false` in `vercel.json`).** Build minutes were 98%+ of the
+> account's Vercel usage. A push to `main` no longer deploys; deploy deliberately with `vercel deploy --prod` (or a
+> `main-manual` Deploy Hook, once one is created). The daily cron keeps running on the current production deployment.
+> **Restore:** delete the `git` key in `vercel.json`, when this project needs continuous preview/prod again.
