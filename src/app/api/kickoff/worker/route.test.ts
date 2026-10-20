@@ -42,6 +42,14 @@ describe("GET /api/kickoff/worker — cron auth", () => {
     expect((await GET(new Request("http://localhost/api/kickoff/worker"))).status).toBe(401);
   });
 
+  it("401 for a wrong token of the same length, and for a bare secret without 'Bearer '", async () => {
+    const wrong = new Request("http://localhost/api/kickoff/worker", { headers: { authorization: "Bearer s3cr3x" } });
+    expect((await GET(wrong)).status).toBe(401);
+    const bare = new Request("http://localhost/api/kickoff/worker", { headers: { authorization: "s3cr3t" } });
+    expect((await GET(bare)).status).toBe(401);
+    expect(mockClaim).not.toHaveBeenCalled();
+  });
+
   it("401 when CRON_SECRET is unset (fail closed)", async () => {
     delete process.env.CRON_SECRET;
     expect((await GET(withSecret())).status).toBe(401);

@@ -23,6 +23,7 @@ import { stubPlanner, stubCritic } from "./provider";
 import { CASE_POLICY_LOOKUP } from "./fixtures";
 
 const CASE_ID = "22222222-2222-4222-8222-222222222222";
+const JOB_ID = "33333333-3333-4333-8333-333333333333";
 const LIMITS = { tokenCap: 60000, timeoutMs: 120000, maxConcurrent: 1, dailyCeiling: 20 };
 
 beforeEach(() => {
@@ -111,13 +112,13 @@ describe("executeJob — state machine (LLM stages injected)", () => {
 
 describe("recordFeedback", () => {
   it("persists a signal on a job the caller owns", async () => {
-    selectRows = [{ id: "j", userId: "user-a" }];
-    expect(await recordFeedback({ jobId: "j", userId: "user-a", kind: "usable", value: "yes" })).toBe(true);
+    selectRows = [{ id: JOB_ID, userId: "user-a" }];
+    expect(await recordFeedback({ jobId: JOB_ID, userId: "user-a", kind: "usable", value: "yes" })).toBe(true);
   });
 
   it("refuses to write on a job the caller doesn't own", async () => {
     selectRows = [];
-    expect(await recordFeedback({ jobId: "j", userId: "not-owner", kind: "gap-real", value: "no" })).toBe(false);
+    expect(await recordFeedback({ jobId: JOB_ID, userId: "not-owner", kind: "gap-real", value: "no" })).toBe(false);
   });
 });
 
@@ -162,22 +163,37 @@ describe("createJob", () => {
 
 describe("approveJob — draft→approve gate", () => {
   it("approves a completed plan", async () => {
-    selectRows = [{ id: "j", status: "complete", userId: "user-a" }];
-    expect(await approveJob("j", "user-a")).toBe("approved");
+    selectRows = [{ id: JOB_ID, status: "complete", userId: "user-a" }];
+    expect(await approveJob(JOB_ID, "user-a")).toBe("approved");
   });
 
   it("refuses a partial plan (non-approvable)", async () => {
-    selectRows = [{ id: "j", status: "partial", userId: "user-a" }];
-    expect(await approveJob("j", "user-a")).toBe("not-approvable");
+    selectRows = [{ id: JOB_ID, status: "partial", userId: "user-a" }];
+    expect(await approveJob(JOB_ID, "user-a")).toBe("not-approvable");
   });
 
   it("refuses a queued plan (non-approvable)", async () => {
-    selectRows = [{ id: "j", status: "queued", userId: "user-a" }];
-    expect(await approveJob("j", "user-a")).toBe("not-approvable");
+    selectRows = [{ id: JOB_ID, status: "queued", userId: "user-a" }];
+    expect(await approveJob(JOB_ID, "user-a")).toBe("not-approvable");
   });
 
   it("returns not-found for a non-owner (scoped query finds nothing)", async () => {
     selectRows = [];
-    expect(await approveJob("j", "not-owner")).toBe("not-found");
+    expect(await approveJob(JOB_ID, "not-owner")).toBe("not-found");
+  });
+});
+
+describe("owned-job lookups — malformed ids", () => {
+  // The PK is a Postgres uuid: binding "job-1" would throw 22P02 (a 500 in
+  // every route). A malformed id must read as not-found, and must not reach
+  // the DB even if a row would otherwise "match".
+  it("approveJob returns not-found for a non-UUID id", async () => {
+    selectRows = [{ id: "job-1", status: "complete", userId: "user-a" }];
+    expect(await approveJob("job-1", "user-a")).toBe("not-found");
+  });
+
+  it("recordFeedback refuses a non-UUID id", async () => {
+    selectRows = [{ id: "x", userId: "user-a" }];
+    expect(await recordFeedback({ jobId: "x'; drop table--", userId: "user-a", kind: "usable", value: "yes" })).toBe(false);
   });
 });

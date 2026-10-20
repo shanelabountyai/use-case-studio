@@ -11,6 +11,7 @@ import { createJob } from "@/lib/kickoff/worker";
 import { withinLimits } from "@/lib/kickoff/limits";
 import { PROMPT_ROSTER_VERSION } from "@/lib/kickoff/provider";
 import type { Provenance } from "@/lib/kickoff/contracts";
+import { isUuid } from "@/lib/ids";
 
 export const runtime = "nodejs"; // Neon HTTP driver + node:crypto (caseVersionHash)
 export const maxDuration = 300; // after() waits for the worker it starts, which can use its full 300s
@@ -32,6 +33,9 @@ export async function POST(req: Request) {
   const caseId = body?.caseId;
   if (typeof caseId !== "string")
     return NextResponse.json({ error: "caseId required" }, { status: 400 });
+
+  // A malformed id can't name a case; 404 like a non-owner instead of a uuid-cast 500.
+  if (!isUuid(caseId)) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const [caseRow] = await db.select().from(useCases).where(owned(caseId, session.user.id));
   if (!caseRow) return NextResponse.json({ error: "not found" }, { status: 404 });

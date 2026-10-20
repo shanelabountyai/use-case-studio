@@ -5,6 +5,10 @@ import { recordFeedback, type FeedbackKind } from "@/lib/kickoff/worker";
 export const runtime = "nodejs";
 
 const KINDS: FeedbackKind[] = ["gap-real", "fabrication", "usable"];
+// Bound what one request can write into kickoff_feedback (text columns are
+// unbounded). Generous for a yes/no/rating or a quoted finding title.
+const MAX_VALUE = 2000;
+const MAX_REF = 500;
 
 /* POST /api/kickoff/:jobId/feedback  { kind, ref?, value }
    Owner-scoped inline feedback — "was this gap real?", "flag a fabrication",
@@ -16,6 +20,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ jobId: 
   const body = await req.json().catch(() => null);
   if (!body || !KINDS.includes(body.kind) || typeof body.value !== "string")
     return NextResponse.json({ error: "kind (gap-real|fabrication|usable) and value required" }, { status: 400 });
+  if (body.value.length > MAX_VALUE || (typeof body.ref === "string" && body.ref.length > MAX_REF))
+    return NextResponse.json({ error: `value is capped at ${MAX_VALUE} chars, ref at ${MAX_REF}` }, { status: 400 });
 
   const ok = await recordFeedback({
     jobId,
