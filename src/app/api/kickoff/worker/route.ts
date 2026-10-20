@@ -5,6 +5,7 @@ import { getProvider } from "@/lib/kickoff/provider";
 import { evaluate, type UseCase } from "@/lib/engine";
 import type { Provenance } from "@/lib/kickoff/contracts";
 import { KICKOFF_EFFORT } from "@/lib/kickoff/claude";
+import { safeEqual } from "@/lib/ids";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // Vercel Pro ceiling — a single-shot 2-call run fits (BK-S2)
@@ -16,7 +17,8 @@ export const maxDuration = 300; // Vercel Pro ceiling — a single-shot 2-call r
    minute cron drains a backlog steadily and keeps each run inside maxDuration. */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`)
+  // Constant-time compare: a plain !== leaks how many leading bytes matched.
+  if (!secret || !safeEqual(req.headers.get("authorization") ?? "", `Bearer ${secret}`))
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   // Kill switch: stop new work and fail anything in-flight cleanly.
