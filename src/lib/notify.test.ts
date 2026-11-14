@@ -69,6 +69,24 @@ describe("sendIntakeNotification", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("logs (key name only, no recipient or body) when the key is unset in production", async () => {
+    delete process.env.AUTH_RESEND_KEY;
+    vi.stubEnv("NODE_ENV", "production");
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const ok = await sendIntakeNotification("owner@example.com", PAYLOAD, vi.fn() as unknown as typeof fetch);
+      expect(ok).toBe(false);
+      expect(err).toHaveBeenCalledOnce();
+      const msg = String(err.mock.calls[0][0]);
+      expect(msg).toContain("AUTH_RESEND_KEY");
+      expect(msg).not.toContain("owner@example.com");
+      expect(msg).not.toContain("policy PDF");
+    } finally {
+      err.mockRestore();
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("returns false on a non-OK response", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 422 });
     const ok = await sendIntakeNotification("owner@example.com", PAYLOAD, fetchMock as unknown as typeof fetch);

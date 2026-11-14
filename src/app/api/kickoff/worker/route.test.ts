@@ -10,6 +10,7 @@ vi.mock("@/lib/kickoff/flags", () => ({
 vi.mock("@/lib/kickoff/provider", () => ({
   getProvider: vi.fn(() => ({ planner: vi.fn(), critic: vi.fn(), model: "claude-opus-5" })),
 }));
+vi.mock("@/lib/rate-limit", () => ({ sweepRateLimits: vi.fn(async () => {}) }));
 vi.mock("@/lib/kickoff/worker", () => ({
   claimNextJob: vi.fn(),
   executeJob: vi.fn(),
