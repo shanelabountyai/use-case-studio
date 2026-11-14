@@ -15,14 +15,14 @@ export default defineConfig({
   // has a playwright-report/ artifact to upload on failure.
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
+    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:5700",
     trace: "on-first-retry",
   },
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
         command: "npm run build && npm run start",
-        url: "http://localhost:3000",
+        url: "http://localhost:5700",
         reuseExistingServer: !process.env.CI,
         timeout: 180_000,
         // `next start` runs in production mode, where Auth.js only trusts the
