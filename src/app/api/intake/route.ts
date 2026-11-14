@@ -6,6 +6,7 @@ import { evaluate } from "@/lib/engine";
 import { parseUseCase } from "@/lib/validation";
 import { intakeToPayload, isBotSubmission, hasMinimumContent, type IntakeAnswers, type IntakePayload } from "@/lib/intake";
 import { sendIntakeNotification } from "@/lib/notify";
+import { matchesSecret } from "@/lib/secrets";
 
 export const runtime = "nodejs"; // Neon HTTP driver + FormData parsing
 
@@ -16,8 +17,9 @@ export const runtime = "nodejs"; // Neon HTTP driver + FormData parsing
 
    Because it is public, it is defended in layers:
      - honeypot (botcheck) + a required problem statement drop empty/bot noise,
-     - an optional shared INTAKE_KEY gates who may submit (the discovery link
-       is the capability — same model the form's old web3forms key used),
+     - a required shared INTAKE_KEY gates who may submit (the discovery link
+       is the capability — same model the form's old web3forms key used);
+       unset INTAKE_KEY = the endpoint refuses every submission (fail closed),
      - per-field length caps (in intake.ts) and a per-instance rate limit bound
        resource abuse,
      - the owner is resolved server-side from INTAKE_OWNER_EMAIL — the client
@@ -73,9 +75,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "missing_problem" }, { status: 422 });
   }
 
-  // Optional shared-secret gate. Only enforced when INTAKE_KEY is configured.
+  // Shared-secret gate (scorecard K8). Fails closed: with INTAKE_KEY unset the
+  // endpoint accepts nothing, rather than accepting everyone. Constant-time.
   const requiredKey = process.env.INTAKE_KEY;
-  if (requiredKey && answers["key"] !== requiredKey) {
+  if (!requiredKey) {
+    return NextResponse.json({ ok: false, error: "intake_not_configured" }, { status: 503 });
+  }
+  if (!matchesSecret(answers["key"], requiredKey)) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 

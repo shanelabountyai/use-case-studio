@@ -5,18 +5,18 @@ import { getProvider } from "@/lib/kickoff/provider";
 import { evaluate, type UseCase } from "@/lib/engine";
 import type { Provenance } from "@/lib/kickoff/contracts";
 import { KICKOFF_EFFORT } from "@/lib/kickoff/claude";
+import { isAuthorizedCron } from "@/lib/secrets";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // Vercel Pro ceiling — a single-shot 2-call run fits (BK-S2)
 
 /* GET /api/kickoff/worker — the Vercel Cron drain (schedule in vercel.json).
    Claims one job per tick and runs it to a terminal state. Secured by
-   CRON_SECRET: Vercel Cron sends it as a Bearer token; fail closed if unset so
-   the endpoint is never open. Processes one job per invocation — the every-
+   CRON_SECRET: Vercel Cron sends it as a Bearer token; compared in constant
+   time and fail closed if unset so the endpoint is never open. Processes one job per invocation — the every-
    minute cron drains a backlog steadily and keeps each run inside maxDuration. */
 export async function GET(req: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`)
+  if (!isAuthorizedCron(req))
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   // Kill switch: stop new work and fail anything in-flight cleanly.
