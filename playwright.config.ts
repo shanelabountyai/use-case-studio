@@ -1,5 +1,10 @@
 import "dotenv/config";
 import { defineConfig, devices } from "@playwright/test";
+import { assertLocalOrAllowed } from "./src/db/local-guard";
+
+// e2e writes real sessions and rows (e2e/helpers): refuse a cloud database
+// unless ALLOW_CLOUD_DB=1 (CI sets it for its disposable Neon branch). K12.
+assertLocalOrAllowed(process.env.DATABASE_URL);
 
 /* e2e config. Tests hit a real running app (next start) backed by a real
    Postgres database (DATABASE_URL) — in CI that's a disposable Neon branch,

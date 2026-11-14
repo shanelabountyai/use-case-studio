@@ -35,6 +35,7 @@ export const envSchema = z.object({
   KICKOFF_DAILY_CEILING: positiveInt,
   // Platform / test harness
   VERCEL_ENV: z.string().optional(), // set by Vercel; marks a deployed environment
+  ALLOW_CLOUD_DB: z.enum(["1"]).optional(), // tests may reach a cloud DB only with this (src/db/local-guard.ts)
 });
 
 export type Env = z.infer<typeof envSchema>;
