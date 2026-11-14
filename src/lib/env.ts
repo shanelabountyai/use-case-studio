@@ -51,5 +51,10 @@ export function parseEnv(source: Record<string, string | undefined>): Env {
   if (e.NODE_ENV === "production" && !e.AUTH_SECRET) {
     throw new Error("Invalid environment: AUTH_SECRET (required in production)");
   }
+  // Scorecard K10 (INV-13): a production deploy with no email provider would
+  // silently drop every magic-link sign-in and every intake notification.
+  if (e.VERCEL_ENV === "production" && !e.AUTH_RESEND_KEY) {
+    throw new Error("Invalid environment: AUTH_RESEND_KEY (required in production)");
+  }
   return e;
 }

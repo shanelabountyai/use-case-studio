@@ -43,6 +43,15 @@ describe("parseEnv", () => {
   });
 });
 
+describe("missing provider in production (K10)", () => {
+  it("refuses to boot a Vercel production deploy without AUTH_RESEND_KEY", () => {
+    const base = { DATABASE_URL: "x", NODE_ENV: "production", AUTH_SECRET: "s" };
+    expect(() => parseEnv({ ...base, VERCEL_ENV: "production" })).toThrow(/AUTH_RESEND_KEY/);
+    expect(() => parseEnv({ ...base, VERCEL_ENV: "production", AUTH_RESEND_KEY: "re_x" })).not.toThrow();
+    expect(() => parseEnv({ ...base, VERCEL_ENV: "preview" })).not.toThrow();
+  });
+});
+
 describe(".env.example (K11)", () => {
   it("lists every schema key, and nothing else besides test-harness keys", () => {
     const schemaKeys = Object.keys(envSchema.shape).filter((k) => !PLATFORM.includes(k));
