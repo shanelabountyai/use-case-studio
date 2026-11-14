@@ -11,8 +11,15 @@ vi.mock("@/db", () => ({
   db: { select: () => chain([{ id: "owner-1" }]), insert: () => insert() },
 }));
 vi.mock("@/lib/notify", () => ({ sendIntakeNotification: vi.fn(async () => false) }));
+vi.mock("@/lib/rate-limit", async (orig) => ({
+  ...(await orig<typeof import("@/lib/rate-limit")>()),
+  hit: vi.fn(async () => true),
+}));
 
+import { hit } from "@/lib/rate-limit";
 import { POST } from "./route";
+
+const mockHit = vi.mocked(hit);
 
 let ipSeq = 0;
 const post = (body: Record<string, string>) =>
@@ -27,6 +34,8 @@ const post = (body: Record<string, string>) =>
 
 beforeEach(() => {
   insert.mockClear();
+  mockHit.mockClear();
+  mockHit.mockResolvedValue(true);
   process.env.INTAKE_OWNER_EMAIL = "owner@test.local";
   process.env.INTAKE_KEY = "intake-key";
 });
@@ -49,5 +58,20 @@ describe("POST /api/intake — INTAKE_KEY gate (K8)", () => {
     const res = await post({ Problem: "slow claims", key: "intake-key" });
     expect(res.status).toBe(200);
     expect(insert).toHaveBeenCalledOnce();
+  });
+});
+
+describe("POST /api/intake — shared rate limit (K5)", () => {
+  it("counts each submission against intake:<ip> in the shared limiter", async () => {
+    await post({ Problem: "slow claims", key: "intake-key" });
+    expect(mockHit).toHaveBeenCalledWith(expect.stringMatching(/^intake:10\.0\.0\.\d+$/), expect.objectContaining({ limit: 20 }));
+  });
+
+  it("429 with Retry-After when the limiter refuses, before any write", async () => {
+    mockHit.mockResolvedValue(false);
+    const res = await post({ Problem: "slow claims", key: "intake-key" });
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("60");
+    expect(insert).not.toHaveBeenCalled();
   });
 });

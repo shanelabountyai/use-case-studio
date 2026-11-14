@@ -6,6 +6,7 @@ import { evaluate, type UseCase } from "@/lib/engine";
 import type { Provenance } from "@/lib/kickoff/contracts";
 import { KICKOFF_EFFORT } from "@/lib/kickoff/claude";
 import { isAuthorizedCron } from "@/lib/secrets";
+import { sweepRateLimits } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // Vercel Pro ceiling — a single-shot 2-call run fits (BK-S2)
@@ -18,6 +19,9 @@ export const maxDuration = 300; // Vercel Pro ceiling — a single-shot 2-call r
 export async function GET(req: Request) {
   if (!isAuthorizedCron(req))
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  // Housekeeping: drop rate-limit windows older than a day. Never blocks the drain.
+  await sweepRateLimits().catch(() => {});
 
   // Kill switch: stop new work and fail anything in-flight cleanly.
   if (kickoffKilled()) {
