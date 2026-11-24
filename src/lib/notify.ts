@@ -62,7 +62,13 @@ export async function sendIntakeNotification(
   fetchImpl: typeof fetch = fetch,
 ): Promise<boolean> {
   const key = process.env.AUTH_RESEND_KEY;
-  if (!key || !to) return false;
+  if (!key || !to) {
+    // Never silent in production (scorecard K10): say what is missing, never
+    // the recipient or the intake body.
+    if (process.env.NODE_ENV === "production")
+      console.error(`[intake] notification not sent: ${!key ? "AUTH_RESEND_KEY" : "recipient"} unset`);
+    return false;
+  }
   try {
     const { subject, text } = intakeNotificationEmail(p);
     const res = await fetchImpl(RESEND_ENDPOINT, {

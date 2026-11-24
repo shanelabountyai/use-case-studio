@@ -101,3 +101,13 @@ export const shareLinks = pgTable("share_link", {
   revoked: boolean("revoked").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+/* Fixed-window rate-limit counters (scorecard K5, foundation INV-09). Shared
+   across every serverless instance and cold start, unlike an in-memory Map.
+   One atomic upsert per hit (src/lib/rate-limit.ts); old windows are swept by
+   the kickoff worker cron. */
+export const rateLimits = pgTable("rate_limit", {
+  key: text("key").notNull(),
+  windowStart: timestamp("window_start", { mode: "date" }).notNull(),
+  count: integer("count").notNull().default(0),
+}, (t) => [primaryKey({ columns: [t.key, t.windowStart] })]);
