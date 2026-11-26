@@ -18,6 +18,7 @@ import type { IntegratedPlan, CriticAudit, LaneStatus, Provenance } from "./cont
 import { stubPlanner, stubCritic, type Planner, type Critic } from "./provider";
 import { getLimits, type KickoffLimits } from "./limits";
 import { priceUsd, kickoffModel } from "./pricing";
+import { isUuid } from "../ids";
 
 const LEASE_MS = 5 * 60 * 1000; // 5 min — comfortably over a single-shot run on Vercel Pro (300s)
 const MAX_ATTEMPTS = 3;
@@ -160,6 +161,9 @@ export async function createJob(input: {
 
 /** Owner-scoped fetch of a full job row (approve/export/poll). */
 export async function getOwnedJob(jobId: string, userId: string) {
+  // A non-UUID id can't match the uuid PK, and binding it would make Postgres
+  // throw (a 500 in every route built on this). Treat it as not-found.
+  if (!isUuid(jobId)) return null;
   const [row] = await db
     .select()
     .from(buildKickoffPlans)

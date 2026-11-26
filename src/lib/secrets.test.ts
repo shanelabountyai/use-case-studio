@@ -11,6 +11,14 @@ describe("safeEqual", () => {
     expect(safeEqual("abc", "abcd")).toBe(false);
     expect(safeEqual("", "")).toBe(true);
   });
+
+  it("is true only for identical strings (bearer, empty and length-mismatch cases)", () => {
+    expect(safeEqual("Bearer abc", "Bearer abc")).toBe(true);
+    expect(safeEqual("Bearer abc", "Bearer abd")).toBe(false);
+    expect(safeEqual("", "x")).toBe(false);
+    expect(safeEqual("short", "a much longer secret value")).toBe(false);
+    expect(safeEqual("", "")).toBe(true);
+  });
 });
 
 describe("matchesSecret — fails closed", () => {

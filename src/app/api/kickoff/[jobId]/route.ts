@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { buildKickoffPlans } from "@/db/schema";
+import { isUuid } from "@/lib/ids";
 
 export const runtime = "nodejs";
 
@@ -12,6 +13,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ jobId: 
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { jobId } = await params;
+  // Malformed id: same 404 as a non-owner, instead of a Postgres uuid-cast 500.
+  if (!isUuid(jobId)) return NextResponse.json({ error: "not found" }, { status: 404 });
   const [row] = await db
     .select()
     .from(buildKickoffPlans)

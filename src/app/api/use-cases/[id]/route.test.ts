@@ -14,6 +14,7 @@ vi.mock("@/db", () => ({
 }));
 
 import { auth } from "@/auth";
+import { db } from "@/db";
 import { GET, PUT, DELETE } from "./route";
 
 const mockAuth = vi.mocked(auth as unknown as () => Promise<unknown>);
@@ -48,5 +49,39 @@ describe("api/use-cases/[id] — authenticated non-owner (scoped query finds not
   });
   it("DELETE returns 404", async () => {
     expect((await DELETE(new Request("http://localhost/x"), { params })).status).toBe(404);
+  });
+});
+
+describe("api/use-cases/[id] — malformed id", () => {
+  // The id column is a Postgres uuid; a non-UUID used to reach the query and
+  // throw (500). It must 404 like any row the caller doesn't own.
+  beforeEach(() => mockAuth.mockResolvedValue({ user: { id: "user-a" } }));
+  const bad = { params: Promise.resolve({ id: "not-a-uuid" }) };
+  // Assert the query is never issued — the empty-chain stub would 404 anyway,
+  // so "no DB call" is what proves the guard (real Postgres would throw).
+  const noDb = () => {
+    const spies = [vi.spyOn(db, "select"), vi.spyOn(db, "update"), vi.spyOn(db, "delete")];
+    return () => { for (const s of spies) { expect(s).not.toHaveBeenCalled(); s.mockRestore(); } };
+  };
+
+  it("GET returns 404 without querying", async () => {
+    const check = noDb();
+    expect((await GET(new Request("http://localhost/x"), bad)).status).toBe(404);
+    check();
+  });
+  it("PUT returns 404 without querying", async () => {
+    const check = noDb();
+    const req = new Request("http://localhost/x", { method: "PUT", body: JSON.stringify(blankCase()) });
+    expect((await PUT(req, bad)).status).toBe(404);
+    check();
+  });
+  it("DELETE returns 404 without querying", async () => {
+    const check = noDb();
+    expect((await DELETE(new Request("http://localhost/x"), bad)).status).toBe(404);
+    check();
+  });
+  it("still 401s an unauthenticated caller first", async () => {
+    mockAuth.mockResolvedValue(null);
+    expect((await GET(new Request("http://localhost/x"), bad)).status).toBe(401);
   });
 });

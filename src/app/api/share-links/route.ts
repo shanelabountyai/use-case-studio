@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { shareLinks, useCases } from "@/db/schema";
 import { generateShareToken } from "@/lib/sharing";
+import { isUuid } from "@/lib/ids";
 
 /* Authenticated share-link management. Links are scoped to cases the caller
    owns — a link can only be created for, listed against, or (in [token]) revoked
@@ -15,6 +16,9 @@ export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const useCaseId = new URL(req.url).searchParams.get("useCaseId");
+  // A malformed id can own no links — answer empty rather than letting the
+  // uuid cast throw a 500.
+  if (useCaseId && !isUuid(useCaseId)) return NextResponse.json([]);
   const where = useCaseId
     ? and(eq(useCases.userId, session.user.id), eq(shareLinks.useCaseId, useCaseId))
     : eq(useCases.userId, session.user.id);
@@ -34,6 +38,8 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const useCaseId = body?.useCaseId;
   if (typeof useCaseId !== "string" || !useCaseId) return NextResponse.json({ error: "useCaseId required" }, { status: 400 });
+
+  if (!isUuid(useCaseId)) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   // Ownership check: never mint a link for someone else's case.
   const [owned] = await db.select({ id: useCases.id }).from(useCases)

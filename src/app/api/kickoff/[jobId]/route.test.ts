@@ -13,7 +13,7 @@ import { auth } from "@/auth";
 import { GET } from "./route";
 
 const mockAuth = vi.mocked(auth as unknown as () => Promise<unknown>);
-const params = Promise.resolve({ jobId: "job-1" });
+const params = Promise.resolve({ jobId: "33333333-3333-4333-8333-333333333333" });
 
 beforeEach(() => {
   mockAuth.mockReset();

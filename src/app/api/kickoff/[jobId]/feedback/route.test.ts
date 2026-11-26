@@ -34,6 +34,20 @@ describe("POST /api/kickoff/:jobId/feedback", () => {
     expect((await post({ kind: "usable" })).status).toBe(400);
   });
 
+  it("400 when value exceeds the length cap (nothing recorded)", async () => {
+    expect((await post({ kind: "usable", value: "x".repeat(2001) })).status).toBe(400);
+    expect(mockRecord).not.toHaveBeenCalled();
+  });
+
+  it("400 when ref exceeds the length cap", async () => {
+    expect((await post({ kind: "gap-real", ref: "r".repeat(501), value: "yes" })).status).toBe(400);
+    expect(mockRecord).not.toHaveBeenCalled();
+  });
+
+  it("accepts values right at the caps", async () => {
+    expect((await post({ kind: "gap-real", ref: "r".repeat(500), value: "x".repeat(2000) })).status).toBe(200);
+  });
+
   it("404 when the job isn't the caller's", async () => {
     mockRecord.mockResolvedValue(false);
     expect((await post({ kind: "fabrication", ref: "99.9%", value: "flagged" })).status).toBe(404);

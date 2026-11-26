@@ -26,6 +26,20 @@ export const runtime = "nodejs"; // Neon HTTP driver + FormData parsing
      - the owner is resolved server-side from INTAKE_OWNER_EMAIL — the client
        never chooses whose Library it writes to. */
 
+/* A JSON body is untrusted: it can be null, an array, or carry non-string
+   values. Before this guard a `null` body threw inside isBotSubmission (500)
+   and an object value was stringified to "[object Object]" into the case.
+   Keep only own string-valued keys — the same contract formToAnswers gives the
+   multipart path. Returns null when the body isn't a plain object. */
+function jsonToAnswers(body: unknown): IntakeAnswers | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const out: IntakeAnswers = {};
+  for (const [k, v] of Object.entries(body as Record<string, unknown>)) {
+    if (typeof v === "string") out[k] = v;
+  }
+  return out;
+}
+
 function formToAnswers(fd: FormData): IntakeAnswers {
   const out: IntakeAnswers = {};
   for (const [k, v] of fd.entries()) {
@@ -41,17 +55,18 @@ export async function POST(req: Request) {
   }
 
   // Accept both multipart/form-data (the form's default) and JSON.
-  let answers: IntakeAnswers;
+  let answers: IntakeAnswers | null;
   const ctype = req.headers.get("content-type") ?? "";
   try {
     if (ctype.includes("application/json")) {
-      answers = (await req.json()) as IntakeAnswers;
+      answers = jsonToAnswers(await req.json());
     } else {
       answers = formToAnswers(await req.formData());
     }
   } catch {
-    return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
+    answers = null;
   }
+  if (!answers) return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
 
   // Honeypot: silently accept so a bot gets no signal, but persist nothing.
   if (isBotSubmission(answers)) return NextResponse.json({ ok: true });
