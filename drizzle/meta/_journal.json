@@ -29,6 +29,13 @@
       "when": 1785187863457,
       "tag": "0003_outstanding_malice",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794622237754,
+      "tag": "0004_rate_limit",
+      "breakpoints": true
     }
   ]
 }

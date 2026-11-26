@@ -67,6 +67,7 @@ jobs:
       - name: Integration tests (real Postgres, disposable branch)
         env:
           DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
+          ALLOW_CLOUD_DB: "1" # deliberate: a disposable per-run Neon branch (K12 guard)
         run: npm run test:integration
       - name: Delete Neon branch
         if: always()
@@ -108,6 +109,7 @@ jobs:
           AUTH_GOOGLE_ID: ${{ secrets.AUTH_GOOGLE_ID }}
           AUTH_GOOGLE_SECRET: ${{ secrets.AUTH_GOOGLE_SECRET }}
           AUTH_RESEND_KEY: ${{ secrets.AUTH_RESEND_KEY }}
+          ALLOW_CLOUD_DB: "1" # deliberate: a disposable per-run Neon branch (K12 guard)
           CI: true
         run: npx playwright test
       - name: Upload Playwright report on failure

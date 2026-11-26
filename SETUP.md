@@ -40,7 +40,7 @@ Google's setup now lives under the **Google Auth Platform**.
 3. Go to **Clients → Create client**. Application type: **Web application**. Name it anything.
 4. Under **Authorized redirect URIs**, add exactly:
    ```
-   http://localhost:3000/api/auth/callback/google
+   http://localhost:5700/api/auth/callback/google
    ```
    (You'll add the production URL in Part B.)
 5. **Create**, then copy the **Client ID** and **Client secret** — the secret is shown only once. Put them in `.env` as `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET`.
@@ -51,7 +51,7 @@ Google's setup now lives under the **Google Auth Platform**.
 npm run db:generate   # generate migration from src/db/schema.ts
 npm run db:migrate    # apply to your Neon database
 npm run test          # engine suite must pass BEFORE anything else
-npm run dev           # http://localhost:3000
+npm run dev           # http://localhost:5700
 ```
 Sign in with Google, land on `/studio`. (The full four-stage UI is the Fable brief's M2 — the shell proves auth + DB work end to end.)
 

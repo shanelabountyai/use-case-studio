@@ -6,6 +6,8 @@ import { evaluate } from "@/lib/engine";
 import { parseUseCase } from "@/lib/validation";
 import { intakeToPayload, isBotSubmission, hasMinimumContent, type IntakeAnswers, type IntakePayload } from "@/lib/intake";
 import { sendIntakeNotification } from "@/lib/notify";
+import { matchesSecret } from "@/lib/secrets";
+import { hit, clientIp, LIMITS, tooMany } from "@/lib/rate-limit";
 
 export const runtime = "nodejs"; // Neon HTTP driver + FormData parsing
 
@@ -16,28 +18,13 @@ export const runtime = "nodejs"; // Neon HTTP driver + FormData parsing
 
    Because it is public, it is defended in layers:
      - honeypot (botcheck) + a required problem statement drop empty/bot noise,
-     - an optional shared INTAKE_KEY gates who may submit (the discovery link
-       is the capability — same model the form's old web3forms key used),
-     - per-field length caps (in intake.ts) and a per-instance rate limit bound
-       resource abuse,
+     - a required shared INTAKE_KEY gates who may submit (the discovery link
+       is the capability — same model the form's old web3forms key used);
+       unset INTAKE_KEY = the endpoint refuses every submission (fail closed),
+     - per-field length caps (in intake.ts) and a shared DB-backed per-IP rate
+       limit (src/lib/rate-limit.ts) bound resource abuse,
      - the owner is resolved server-side from INTAKE_OWNER_EMAIL — the client
        never chooses whose Library it writes to. */
-
-const WINDOW_MS = 60_000;
-const MAX_HITS = 20; // submissions per IP per window
-const hits = new Map<string, { count: number; resetAt: number }>();
-
-function rateLimited(ip: string): boolean {
-  const now = Date.now();
-  if (hits.size > 10_000) hits.clear();
-  const rec = hits.get(ip);
-  if (!rec || now > rec.resetAt) {
-    hits.set(ip, { count: 1, resetAt: now + WINDOW_MS });
-    return false;
-  }
-  rec.count++;
-  return rec.count > MAX_HITS;
-}
 
 function formToAnswers(fd: FormData): IntakeAnswers {
   const out: IntakeAnswers = {};
@@ -48,9 +35,9 @@ function formToAnswers(fd: FormData): IntakeAnswers {
 }
 
 export async function POST(req: Request) {
-  const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "unknown";
-  if (rateLimited(ip)) {
-    return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429, headers: { "Retry-After": "60" } });
+  // Shared, DB-backed limit (scorecard K5): holds across instances and cold starts.
+  if (!(await hit(`intake:${clientIp(req)}`, LIMITS.intakePerIp))) {
+    return NextResponse.json({ ok: false, error: "rate_limited" }, tooMany(60));
   }
 
   // Accept both multipart/form-data (the form's default) and JSON.
@@ -73,9 +60,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "missing_problem" }, { status: 422 });
   }
 
-  // Optional shared-secret gate. Only enforced when INTAKE_KEY is configured.
+  // Shared-secret gate (scorecard K8). Fails closed: with INTAKE_KEY unset the
+  // endpoint accepts nothing, rather than accepting everyone. Constant-time.
   const requiredKey = process.env.INTAKE_KEY;
-  if (requiredKey && answers["key"] !== requiredKey) {
+  if (!requiredKey) {
+    return NextResponse.json({ ok: false, error: "intake_not_configured" }, { status: 503 });
+  }
+  if (!matchesSecret(answers["key"], requiredKey)) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 
