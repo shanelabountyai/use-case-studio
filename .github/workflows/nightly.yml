@@ -1,0 +1,51 @@
+name: Nightly
+
+# Runs the unit suite every night and fails the run on any regression. That
+# suite includes the free, offline half of the kickoff eval harness: the golden
+# corpus over the stub planner/critic, the deterministic planted-fabrication
+# red-team, plan invariants and the judge maths (src/lib/kickoff/*.test.ts).
+# The *.live.test.ts evals need BK_LIVE=1 and a paid ANTHROPIC_API_KEY, so they
+# skip here by design; no model is called and no secret is used.
+# A failed scheduled run emails you if your GitHub notification settings say
+# so; see docs/CI-CLAUDE.md. Existing CI (ci.yml) is unchanged.
+
+on:
+  schedule:
+    - cron: '41 8 * * *' # 08:41 UTC daily
+  workflow_dispatch:
+  # Self-test: a pull request that edits this file runs it once.
+  pull_request:
+    paths:
+      - '.github/workflows/nightly.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-and-offline-evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      # No lockfile is committed (see ci.yml), so this resolves fresh each
+      # night: a dependency release that breaks the suite shows up here too.
+      - run: npm install
+
+      - name: Unit suite + offline eval harness (live evals skip without BK_LIVE)
+        # src/db/index.ts calls neon() at import time; a syntactically valid
+        # dummy URL is enough because nothing here opens a connection (ci.yml
+        # does the same).
+        env:
+          DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+        run: npm run test
