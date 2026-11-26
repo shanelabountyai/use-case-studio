@@ -94,7 +94,8 @@
   <form id="guide">
     <!-- Submissions post to this app's own /api/intake (same origin), which
          creates a Capture-stage draft in the practitioner's Library. -->
-    <!-- Optional gate: if INTAKE_KEY is set on the server, put the same value here. -->
+    <!-- Required gate: /api/intake refuses every submission until INTAKE_KEY is set
+         on the server, and then accepts only this same value. -->
     <input type="hidden" name="key" value="">
     <input type="checkbox" name="botcheck" style="display:none" tabindex="-1" autocomplete="off">
 

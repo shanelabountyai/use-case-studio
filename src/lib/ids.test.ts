@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isUuid, safeEqual } from "./ids";
+import { isUuid } from "./ids";
 
 describe("isUuid", () => {
   it("accepts canonical UUIDs (any case), as Postgres gen_random_uuid() emits", () => {
@@ -13,15 +13,5 @@ describe("isUuid", () => {
       " 00000000-0000-0000-0000-000000000000", "00000000-0000-0000-0000-000000000000'--", null, undefined, 42, {}]) {
       expect(isUuid(v)).toBe(false);
     }
-  });
-});
-
-describe("safeEqual", () => {
-  it("is true only for identical strings", () => {
-    expect(safeEqual("Bearer abc", "Bearer abc")).toBe(true);
-    expect(safeEqual("Bearer abc", "Bearer abd")).toBe(false);
-    expect(safeEqual("", "x")).toBe(false);
-    expect(safeEqual("short", "a much longer secret value")).toBe(false);
-    expect(safeEqual("", "")).toBe(true);
   });
 });

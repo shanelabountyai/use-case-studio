@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 /* POST /api/intake is the app's only UNAUTHENTICATED write. These tests pin
-   its defensive layers: rate limit, body parsing, honeypot, minimum content,
-   optional shared key, server-side owner resolution, and a server-computed
-   verdict (the client never chooses whose Library it writes to, or the
-   verdict it lands with). */
+   its defensive layers: shared rate limit (K5), body parsing, honeypot,
+   minimum content, the fail-closed INTAKE_KEY gate (K8), server-side owner
+   resolution, and a server-computed verdict (the client never chooses whose
+   Library it writes to, or the verdict it lands with). */
 
 vi.mock("@/lib/notify", () => ({ sendIntakeNotification: vi.fn(async () => true) }));
 
@@ -13,7 +13,7 @@ let ownerRows: unknown[] = [];
 const inserted: Record<string, unknown>[] = [];
 const chain = (rows: unknown[]) => {
   const p = Promise.resolve(rows) as Promise<unknown[]> & Record<string, unknown>;
-  for (const m of ["from", "where", "limit"]) p[m] = () => p;
+  for (const m of ["from", "where", "limit", "values", "set", "returning"]) p[m] = () => p;
   return p;
 };
 vi.mock("@/db", () => ({
@@ -28,15 +28,32 @@ vi.mock("@/db", () => ({
   },
 }));
 
+// The shared limiter is DB-backed (src/lib/rate-limit.ts, covered by its own
+// unit + integration tests). Here `hit` is replaced by an in-memory stand-in
+// with the same contract: true while a key's count is within `limit`.
+vi.mock("@/lib/rate-limit", async (orig) => ({
+  ...(await orig<typeof import("@/lib/rate-limit")>()),
+  hit: vi.fn(async () => true),
+}));
+
 import { sendIntakeNotification } from "@/lib/notify";
+import { hit, type Limit } from "@/lib/rate-limit";
 import { evaluate, type UseCase } from "@/lib/engine";
 import { POST } from "./route";
 
 const mockNotify = vi.mocked(sendIntakeNotification);
+const mockHit = vi.mocked(hit);
 const OWNER_ID = "owner-user-id";
+const KEY = "intake-key";
 
-// Each test gets its own client IP so the module-level rate-limit table
-// never bleeds between tests.
+const counts = new Map<string, number>();
+const inMemoryHit = async (key: string, { limit }: Limit) => {
+  const n = (counts.get(key) ?? 0) + 1;
+  counts.set(key, n);
+  return n <= limit;
+};
+
+// Each test gets its own client IP so limiter counts never bleed between tests.
 let ipSeq = 0;
 const nextIp = () => `10.0.0.${++ipSeq}`;
 
@@ -57,14 +74,20 @@ const formReq = (fields: Record<string, string>, ip = nextIp()) => {
   });
 };
 
-const good = { Problem: "Agents re-answer the same policy questions all day.", Company: "Acme" };
+const post = (body: Record<string, string>) => POST(jsonReq(body));
+
+const base = { Problem: "Agents re-answer the same policy questions all day.", Company: "Acme" };
+const good = { ...base, key: KEY };
 
 beforeEach(() => {
   ownerRows = [{ id: OWNER_ID }];
   inserted.length = 0;
+  counts.clear();
   mockNotify.mockClear();
+  mockHit.mockReset();
+  mockHit.mockImplementation(inMemoryHit);
   process.env.INTAKE_OWNER_EMAIL = "owner@example.com";
-  delete process.env.INTAKE_KEY;
+  process.env.INTAKE_KEY = KEY;
 });
 
 afterEach(() => {
@@ -95,8 +118,36 @@ describe("POST /api/intake — body parsing", () => {
   });
 
   it("a non-string Problem counts as missing (422), never '[object Object]'", async () => {
-    expect((await POST(jsonReq({ Problem: { a: 1 } }))).status).toBe(422);
+    expect((await POST(jsonReq({ Problem: { a: 1 }, key: KEY }))).status).toBe(422);
     expect(inserted).toHaveLength(0);
+  });
+
+  it("a non-string key is refused (403), never coerced", async () => {
+    expect((await POST(jsonReq({ ...base, key: [KEY] }))).status).toBe(403);
+    expect(inserted).toHaveLength(0);
+  });
+});
+
+describe("POST /api/intake — INTAKE_KEY gate (K8)", () => {
+  it("fails closed with 503 when INTAKE_KEY is unset, and writes nothing", async () => {
+    delete process.env.INTAKE_KEY;
+    const res = await post({ Problem: "slow claims", key: "" });
+    expect(res.status).toBe(503);
+    expect(inserted).toHaveLength(0);
+  });
+
+  it("403 on a missing or wrong key, and writes nothing", async () => {
+    expect((await post({ Problem: "slow claims" })).status).toBe(403);
+    expect((await post({ Problem: "slow claims", key: "wrong" })).status).toBe(403);
+    expect((await post({ ...base, key: "nope" })).status).toBe(403);
+    expect((await post(base)).status).toBe(403);
+    expect(inserted).toHaveLength(0);
+  });
+
+  it("accepts the right key and persists one draft", async () => {
+    const res = await post({ Problem: "slow claims", key: KEY });
+    expect(res.status).toBe(200);
+    expect(inserted).toHaveLength(1);
   });
 });
 
@@ -109,22 +160,9 @@ describe("POST /api/intake — gates", () => {
   });
 
   it("422 when the problem statement is blank", async () => {
-    const res = await POST(jsonReq({ Problem: "   ", Company: "Acme" }));
+    const res = await POST(jsonReq({ Problem: "   ", Company: "Acme", key: KEY }));
     expect(res.status).toBe(422);
     expect((await res.json()).error).toBe("missing_problem");
-  });
-
-  it("403 when INTAKE_KEY is configured and the key is wrong or missing", async () => {
-    process.env.INTAKE_KEY = "k-123";
-    expect((await POST(jsonReq({ ...good, key: "nope" }))).status).toBe(403);
-    expect((await POST(jsonReq(good))).status).toBe(403);
-    expect(inserted).toHaveLength(0);
-  });
-
-  it("accepts the right INTAKE_KEY", async () => {
-    process.env.INTAKE_KEY = "k-123";
-    expect((await POST(jsonReq({ ...good, key: "k-123" }))).status).toBe(200);
-    expect(inserted).toHaveLength(1);
   });
 
   it("503 when no owner is configured", async () => {
@@ -136,6 +174,21 @@ describe("POST /api/intake — gates", () => {
   it("503 when the configured owner has no account", async () => {
     ownerRows = [];
     expect((await POST(jsonReq(good))).status).toBe(503);
+    expect(inserted).toHaveLength(0);
+  });
+});
+
+describe("POST /api/intake — shared rate limit (K5)", () => {
+  it("counts each submission against intake:<ip> in the shared limiter", async () => {
+    await post(good);
+    expect(mockHit).toHaveBeenCalledWith(expect.stringMatching(/^intake:10\.0\.0\.\d+$/), expect.objectContaining({ limit: 20 }));
+  });
+
+  it("429 with Retry-After when the limiter refuses, before any write", async () => {
+    mockHit.mockResolvedValue(false);
+    const res = await post(good);
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("60");
     expect(inserted).toHaveLength(0);
   });
 
@@ -170,9 +223,8 @@ describe("POST /api/intake — persistence", () => {
   });
 
   it("never persists the shared intake key into the payload", async () => {
-    process.env.INTAKE_KEY = "k-123";
-    await POST(jsonReq({ ...good, key: "k-123" }));
-    expect(JSON.stringify(inserted[0])).not.toContain("k-123");
+    await POST(jsonReq(good));
+    expect(JSON.stringify(inserted[0])).not.toContain(KEY);
   });
 
   it("accepts the discovery form's multipart body and notifies the owner", async () => {

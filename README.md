@@ -44,7 +44,7 @@ These are defensible defaults, not the only valid choices — swap freely (e.g.,
 1. `npm install`
 2. Create a Neon project (neon.tech), copy the connection string → `DATABASE_URL` in `.env` (copy `.env.example`).
 3. `npx auth secret` → `AUTH_SECRET`.
-4. Google Cloud Console → OAuth client (Web). Redirect URI: `http://localhost:3000/api/auth/callback/google` (add the production URL later). → `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`.
+4. Google Cloud Console → OAuth client (Web). Redirect URI: `http://localhost:5700/api/auth/callback/google` (add the production URL later). → `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`.
 5. `npm run db:generate && npm run db:migrate`
 6. `npm run test` — engine suite should pass before you touch anything else.
 7. `npm run dev`
